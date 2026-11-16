@@ -83,7 +83,7 @@ class SandboxUnavailableError(RuntimeError):
 class DockerExecutor:
     def __init__(
         self,
-        image: str = "dataquorum/sandbox:0.1",
+        image: str = "dataquorum/sandbox:0.2",
         *,
         timeout_seconds: float = 60,
         memory: str = "1g",

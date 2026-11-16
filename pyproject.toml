@@ -93,6 +93,8 @@ known-third-party = ["docker"]
 "images/original/worker.py" = ["E501"]
 "tests/test_evals.py" = ["E501"]
 "tests/test_sql.py" = ["E501"]
+"tests/test_loader.py" = ["E501"]
+"tests/sandbox/test_docker_executor.py" = ["E501"]
 
 [[tool.mypy.overrides]]
 module = ["openml", "openml.*", "statsmodels", "statsmodels.*", "scipy", "scipy.*"]

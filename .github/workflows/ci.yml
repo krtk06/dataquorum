@@ -51,11 +51,11 @@ jobs:
         with:
           enable-cache: true
       - name: Build the sandbox image
-        run: docker build -t dataquorum/sandbox:0.1 images/sandbox
+        run: docker build -t dataquorum/sandbox:0.2 images/sandbox
       - name: Install
         run: uv sync --locked
       - name: Escape and executor tests
         # Fails if the image is missing instead of silently skipping.
         run: |
-          docker image inspect dataquorum/sandbox:0.1 > /dev/null
+          docker image inspect dataquorum/sandbox:0.2 > /dev/null
           uv run pytest -m docker -v

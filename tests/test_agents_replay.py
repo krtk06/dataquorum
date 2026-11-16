@@ -1,7 +1,7 @@
 """Replay real runs of the week-4 agents (DeepSeek V4.1 Flash via Go), recorded once.
 
 Recording (DQ_RECORD=1) uses the real LLM and the Docker sandbox image
-`dataquorum/sandbox:0.1`. Replay feeds back the recorded LLM replies and runs the recorded,
+`dataquorum/sandbox:0.2`. Replay feeds back the recorded LLM replies and runs the recorded,
 reviewed code in-process; it never runs freshly generated code.
 
     DQ_RECORD=1 uv run pytest tests/test_agents_replay.py     # needs .env key + Docker

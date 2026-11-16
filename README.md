@@ -37,7 +37,7 @@ key (developed against DeepSeek V4.1 Flash via OpenCode Go).
 ```bash
 git clone https://github.com/krtk06/dataquorum && cd dataquorum
 uv sync
-docker build -t dataquorum/sandbox:0.1 images/sandbox
+docker build -t dataquorum/sandbox:0.2 images/sandbox
 cp .env.example .env   # then add OPENCODE_GO_API_KEY
 ```
 

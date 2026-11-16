@@ -12,6 +12,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from dataquorum.agents.cleaning import CLEANING
+from dataquorum.agents.loader import LOADER
 from dataquorum.agents.sql import SQL
 from dataquorum.agents.visualization import VISUALIZATION
 from dataquorum.agents.wrangling import WRANGLING
@@ -21,7 +22,7 @@ from dataquorum.core.engine import Engine, ResultSink, StructuredLLM
 from dataquorum.sandbox.executor import Executor
 
 AGENTS: dict[str, AgentSpec] = {
-    spec.name: spec for spec in (CLEANING, WRANGLING, VISUALIZATION, SQL)
+    spec.name: spec for spec in (CLEANING, WRANGLING, VISUALIZATION, SQL, LOADER)
 }
 
 
@@ -62,4 +63,4 @@ def make_engine(
     )
 
 
-__all__ = ["AGENTS", "CLEANING", "SQL", "VISUALIZATION", "WRANGLING", "make_engine"]
+__all__ = ["AGENTS", "CLEANING", "LOADER", "SQL", "VISUALIZATION", "WRANGLING", "make_engine"]

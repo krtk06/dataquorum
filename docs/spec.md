@@ -117,9 +117,11 @@ Container settings (week 5, docker SDK):
   carry the label `dataquorum.sandbox` so leftovers are easy to find
 - generated-code failures return `ExecutionResult(ok=False)`; Docker down or image missing
   raise `SandboxUnavailableError` (the engine must not burn LLM retries on those)
-- image `dataquorum/sandbox:0.1` built from `images/sandbox/` (base pinned by digest):
-  pandas 2.3.3, numpy 2.5.5, pyarrow 26.0.1, plotly 7.1.0 only (~700 MB; full set in
-  `requirements.lock`). scikit-learn is added when the feature-engineering agent needs it.
+- image `dataquorum/sandbox:0.2` built from `images/sandbox/` (base pinned by digest):
+  pandas 2.3.3, numpy 2.5.5, pyarrow 26.0.1, plotly 7.1.0, openpyxl 3.1.5 (Excel, loader
+  agent) and scikit-learn 1.9.1 (feature-engineering agent) only (~960 MB; full set in
+  `requirements.lock`). Version 0.1 (week 4) had no openpyxl or scikit-learn.
+- folder inputs (loader agent) are mounted read-only at `/io/data`.
 
 Protocol: host writes `input.parquet`, `code.py` and `runner.py` to the input mount. The
 container runs `python runner.py <function> /tmp/out/<file>; echo __DQ_DONE__ $?; sleep`.

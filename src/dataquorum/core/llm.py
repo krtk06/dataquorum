@@ -40,7 +40,7 @@ from dataquorum.core.budget import BudgetGuard
 from dataquorum.core.cost import Usage, usage_from_response
 
 T = TypeVar("T", bound=BaseModel)
-ReasoningEffort = Literal["minimal", "low", "medium", "high"]
+ReasoningEffort = Literal["default", "minimal", "low", "medium", "high"]
 Message = dict[str, str]
 
 DEFAULT_BASE_URL = "https://opencode.ai/inference/go/openai/v1"
@@ -61,8 +61,10 @@ class LLMConfig(BaseModel):
     base_url: str = DEFAULT_BASE_URL
     model: str = DEFAULT_MODEL
     fallback_model: str | None = DEFAULT_FALLBACK_MODEL
-    # None = provider default. Week 2 experiment picks the project default.
-    reasoning_effort: ReasoningEffort | None = None
+    # "low" chosen by the week-2 experiment (research/reasoning_effort/README.md): same pass
+    # rate as the provider default on the cleaning task, ~40% cheaper and faster.
+    # "default" omits the parameter so the provider decides.
+    reasoning_effort: ReasoningEffort = "low"
     temperature: float | None = None
     timeout_seconds: float = 180.0
     max_retries: int = 3  # SDK-level retries for connection errors, 429 and 5xx
@@ -74,13 +76,12 @@ class LLMConfig(BaseModel):
         key = os.getenv("OPENCODE_GO_API_KEY")
         if not key:
             raise RuntimeError("OPENCODE_GO_API_KEY is not set (add it to .env).")
-        effort = os.getenv("DQ_REASONING_EFFORT") or None
         return cls(
             api_key=SecretStr(key),
             base_url=os.getenv("DQ_BASE_URL", DEFAULT_BASE_URL),
             model=os.getenv("DQ_MODEL", DEFAULT_MODEL),
             fallback_model=os.getenv("DQ_FALLBACK_MODEL", DEFAULT_FALLBACK_MODEL) or None,
-            reasoning_effort=cast(ReasoningEffort | None, effort),
+            reasoning_effort=cast(ReasoningEffort, os.getenv("DQ_REASONING_EFFORT", "low")),
         )
 
 
@@ -173,7 +174,7 @@ class LLMClient:
             raise
 
     def _structured_on(
-        self, model: str, messages: list[Message], schema: type[T], effort: ReasoningEffort | None
+        self, model: str, messages: list[Message], schema: type[T], effort: ReasoningEffort
     ) -> StructuredResult[T]:
         usage = Usage()
         convo = list(messages)
@@ -218,12 +219,12 @@ class LLMClient:
         model: str,
         messages: list[Message],
         response_format: dict[str, Any],
-        effort: ReasoningEffort | None,
+        effort: ReasoningEffort,
     ) -> tuple[str | None, str | None, Usage]:
         if self.budget:
             self.budget.check()
         extra: dict[str, Any] = {}
-        if effort:
+        if effort != "default":
             extra["reasoning_effort"] = effort
         if self.config.temperature is not None:
             extra["temperature"] = self.config.temperature

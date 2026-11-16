@@ -98,7 +98,7 @@ def test_happy_path_returns_validated_model_and_usage() -> None:
     body = server.body(0)
     assert body["response_format"]["type"] == "json_schema"
     assert body["response_format"]["json_schema"]["strict"] is True
-    assert "reasoning_effort" not in body  # provider default unless configured
+    assert body["reasoning_effort"] == "low"  # project default (week-2 experiment)
 
 
 def test_sends_identity_headers_and_bearer_key() -> None:
@@ -117,6 +117,12 @@ def test_reasoning_effort_from_call_overrides_config() -> None:
     client.structured(MESSAGES, Plan, reasoning_effort="low")
     assert server.body(0)["reasoning_effort"] == "medium"
     assert server.body(1)["reasoning_effort"] == "low"
+
+
+def test_default_effort_lets_the_provider_decide() -> None:
+    server = FakeServer((200, completion(VALID)))
+    make_client(server).structured(MESSAGES, Plan, reasoning_effort="default")
+    assert "reasoning_effort" not in server.body(0)
 
 
 def test_falls_back_to_json_object_when_json_schema_rejected() -> None:

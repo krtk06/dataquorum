@@ -140,6 +140,7 @@ class AgentResult(BaseModel):
         usage: Usage | None = None,
         message: str | None = None,
         parent_run_id: str | None = None,
+        run_id: str | None = None,
     ) -> AgentResult:
         """Build a result whose status is decided from the facts, never passed in."""
         checks = checks or []
@@ -151,6 +152,7 @@ class AgentResult(BaseModel):
             review_reason=review_reason,
         )
         return cls(
+            run_id=run_id or _new_run_id(),
             agent=agent,
             parent_run_id=parent_run_id,
             status=decision.status,

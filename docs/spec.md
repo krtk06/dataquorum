@@ -140,6 +140,19 @@ validate -> finalize   (pass, or retries exhausted -> failed)
   `failed`.
 - A checkpointer is always on, so runs can resume after review.
 
+Implemented (week 3): `core/engine.py` (`Engine.start` / `Engine.resume`, returning an
+`EngineRun` that is either finished or paused with a review payload), `core/agent_spec.py`
+(an agent is an `AgentSpec`: role, recommend guidance, code guidance, extra checks,
+optional reasoning effort), `core/prompts.py` (fixed system text first for caching; the
+request is passed verbatim in its own section, reviewer notes in another),
+`core/review.py` (`parse_review`), `core/validation.py` (S4 checks) and
+`sandbox/executor.py` + `docker_executor.py`. Revise sends the run back to `recommend`;
+fix attempts see the previous code and the crash or failed blocking checks.
+Checkpoint types are registered with LangGraph's msgpack allowlist. A
+`BudgetExceededError` is not caught, so an eval batch stops instead of logging failures.
+Week 3 handles DataFrame-to-DataFrame agents; figure outputs arrive with the
+visualization agent in week 4.
+
 ## S7. Supervisor (`supervisor/`)
 
 The router returns a structured decision:

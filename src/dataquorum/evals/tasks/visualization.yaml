@@ -1,0 +1,86 @@
+# Visualization tasks. Bar values are read back from the Plotly JSON and compared with the
+# aggregate computed from the sample; histograms are counted from their raw x values.
+defaults:
+  agent: data_visualization
+  rows: 300
+  tags: [visualization]
+
+tasks:
+  - id: viz-adult-count-by-race
+    dataset: adult
+    columns: [race, age]
+    request: Bar chart of the number of people in each race category.
+    checks:
+      - {kind: figure_type, types: [bar, histogram]}
+      - {kind: figure_aggregate, group_by: race, value: age, agg: count}
+
+  - id: viz-adult-hours-by-sex
+    dataset: adult
+    columns: [sex, hours-per-week]
+    request: Bar chart of average hours-per-week for each sex. Do not round.
+    checks:
+      - {kind: figure_type, types: [bar]}
+      - {kind: figure_aggregate, group_by: sex, value: hours-per-week, agg: mean}
+
+  - id: viz-credit-amount-by-purpose
+    dataset: credit-g
+    columns: [purpose, credit_amount]
+    request: Bar chart of total credit_amount for each purpose.
+    checks:
+      - {kind: figure_type, types: [bar]}
+      - {kind: figure_aggregate, group_by: purpose, value: credit_amount, agg: sum}
+
+  - id: viz-credit-age-by-job-horizontal
+    dataset: credit-g
+    columns: [job, age]
+    request: Horizontal bar chart of average age for each job. Do not round.
+    checks:
+      - {kind: figure_type, types: [bar]}
+      - {kind: figure_aggregate, group_by: job, value: age, agg: mean}
+
+  - id: viz-telco-charges-by-contract
+    dataset: telco-customer-churn
+    columns: [Contract, MonthlyCharges]
+    request: Bar chart of average MonthlyCharges for each Contract type. Do not round.
+    checks:
+      - {kind: figure_type, types: [bar]}
+      - {kind: figure_aggregate, group_by: Contract, value: MonthlyCharges, agg: mean}
+
+  - id: viz-telco-tenure-histogram
+    dataset: telco-customer-churn
+    columns: [tenure, Contract]
+    request: Histogram of tenure using every row.
+    checks:
+      - {kind: figure_type, types: [histogram]}
+      - {kind: figure_point_count}
+
+  - id: viz-ames-area-vs-price
+    dataset: ames-housing
+    columns: [Gr_Liv_Area, Sale_Price, Neighborhood]
+    request: Scatter plot of Sale_Price against Gr_Liv_Area, one point per house.
+    checks:
+      - {kind: figure_type, types: [scatter, scattergl]}
+      - {kind: figure_point_count}
+
+  - id: viz-diabetes-glucose-box
+    dataset: diabetes
+    request: Box plot of plas for each class, using every row.
+    checks:
+      - {kind: figure_type, types: [box]}
+      - {kind: figure_point_count}
+
+  - id: viz-diabetes-count-by-class
+    dataset: diabetes
+    request: Bar chart of the number of rows in each class.
+    checks:
+      - {kind: figure_type, types: [bar, histogram]}
+      - {kind: figure_aggregate, group_by: class, value: age, agg: count}
+
+  - id: viz-impossible-telco-revenue-by-region
+    dataset: telco-customer-churn
+    columns: [Contract, MonthlyCharges]
+    request: Bar chart of total revenue for each sales region.
+    expect_status: failed
+    tags: [impossible]
+    checks:
+      - {kind: no_output}

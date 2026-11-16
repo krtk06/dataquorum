@@ -1,0 +1,166 @@
+# Wrangling tasks on clean samples. Aggregate checks match groups by name and values by number
+# (the agent may name result columns as it likes). Impossible requests must fail honestly.
+defaults:
+  agent: data_wrangling
+  rows: 400
+  tags: [wrangling]
+
+tasks:
+  - id: wr-adult-hours-by-education
+    dataset: adult
+    columns: [age, education, hours-per-week, sex]
+    request: >-
+      Average hours-per-week for each education level, sorted from highest to lowest average.
+      Do not round.
+    checks:
+      - {kind: aggregate, group_by: education, value: hours-per-week, agg: mean, order: desc}
+
+  - id: wr-adult-count-by-race
+    dataset: adult
+    columns: [age, race, sex]
+    request: Number of people in each race category.
+    checks:
+      - {kind: aggregate, group_by: race, value: age, agg: count}
+
+  - id: wr-adult-capital-gain-by-sex
+    dataset: adult
+    columns: [sex, capital-gain, capital-loss]
+    request: Total capital-gain for each sex.
+    checks:
+      - {kind: aggregate, group_by: sex, value: capital-gain, agg: sum}
+
+  - id: wr-adult-filter-long-hours-young
+    dataset: adult
+    columns: [age, fnlwgt, hours-per-week, occupation]
+    request: Keep only rows where hours-per-week is above 50 and age is below 30.
+    checks:
+      - {kind: filter_rows, query: "`hours-per-week` > 50 and age < 30", key: fnlwgt}
+
+  - id: wr-adult-net-capital
+    dataset: adult
+    columns: [age, capital-gain, capital-loss]
+    request: >-
+      Add a column net_capital equal to capital-gain minus capital-loss. Keep all rows in the
+      same order.
+    checks:
+      - {kind: derived_column, expression: "`capital-gain` - `capital-loss`"}
+
+  - id: wr-credit-amount-by-purpose
+    dataset: credit-g
+    columns: [purpose, credit_amount, duration]
+    request: Total credit_amount for each purpose, sorted from largest to smallest total.
+    checks:
+      - {kind: aggregate, group_by: purpose, value: credit_amount, agg: sum, order: desc}
+
+  - id: wr-credit-duration-by-housing
+    dataset: credit-g
+    columns: [housing, duration, age]
+    request: Average duration for each housing type. Do not round.
+    checks:
+      - {kind: aggregate, group_by: housing, value: duration, agg: mean}
+
+  - id: wr-credit-top3-purposes
+    dataset: credit-g
+    columns: [purpose, credit_amount]
+    request: >-
+      The 3 purposes with the largest total credit_amount, with their totals, largest first.
+    checks:
+      - {kind: aggregate, group_by: purpose, value: credit_amount, agg: sum, top: 3, order: desc}
+
+  - id: wr-credit-filter-renters-long-loans
+    dataset: credit-g
+    columns: [housing, duration, credit_amount, age]
+    request: Keep only rows where housing is "rent" and duration is greater than 24.
+    checks:
+      - {kind: filter_rows, query: "housing == 'rent' and duration > 24", key: credit_amount}
+
+  - id: wr-credit-monthly-amount
+    dataset: credit-g
+    columns: [credit_amount, duration, purpose]
+    request: >-
+      Add a column monthly_amount equal to credit_amount divided by duration. Do not round.
+      Keep all rows in the same order.
+    checks:
+      - {kind: derived_column, expression: "credit_amount / duration"}
+
+  - id: wr-telco-charges-by-contract
+    dataset: telco-customer-churn
+    columns: [Contract, MonthlyCharges, tenure]
+    request: >-
+      Average MonthlyCharges for each Contract type, sorted from highest to lowest. Do not
+      round.
+    checks:
+      - {kind: aggregate, group_by: Contract, value: MonthlyCharges, agg: mean, order: desc}
+
+  - id: wr-telco-churned-by-payment
+    dataset: telco-customer-churn
+    columns: [PaymentMethod, Churn, tenure]
+    request: Number of churned customers (Churn is "Yes") for each PaymentMethod.
+    checks:
+      - {kind: aggregate, group_by: PaymentMethod, value: tenure, agg: count, query: "Churn == 'Yes'"}
+
+  - id: wr-telco-filter-loyal
+    dataset: telco-customer-churn
+    columns: [Contract, tenure, MonthlyCharges]
+    request: Keep only rows with a "Two year" Contract and tenure above 60.
+    checks:
+      - {kind: filter_rows, query: "Contract == 'Two year' and tenure > 60", key: MonthlyCharges}
+
+  - id: wr-ames-top5-neighborhoods
+    dataset: ames-housing
+    columns: [Neighborhood, Sale_Price, Gr_Liv_Area]
+    rows: 1000
+    request: >-
+      The 5 neighborhoods with the highest median Sale_Price, with their medians, highest
+      first.
+    checks:
+      - {kind: aggregate, group_by: Neighborhood, value: Sale_Price, agg: median, top: 5, order: desc}
+
+  - id: wr-ames-total-sf
+    dataset: ames-housing
+    columns: [Total_Bsmt_SF, Gr_Liv_Area, Sale_Price]
+    request: >-
+      Add a column total_sf equal to Total_Bsmt_SF plus Gr_Liv_Area. Keep all rows in the
+      same order.
+    checks:
+      - {kind: derived_column, expression: "Total_Bsmt_SF + Gr_Liv_Area"}
+
+  - id: wr-ames-house-age
+    dataset: ames-housing
+    columns: [Year_Built, Year_Sold, Sale_Price]
+    request: >-
+      Add a column house_age equal to Year_Sold minus Year_Built. Keep all rows in the same
+      order.
+    checks:
+      - {kind: derived_column, expression: "Year_Sold - Year_Built"}
+
+  - id: wr-diabetes-mass-by-class
+    dataset: diabetes
+    request: Average mass for each class. Do not round.
+    checks:
+      - {kind: aggregate, group_by: class, value: mass, agg: mean}
+
+  - id: wr-diabetes-filter-older-positive
+    dataset: diabetes
+    request: Keep only rows where age is above 50 and class is "tested_positive".
+    checks:
+      - {kind: filter_rows, query: "age > 50 and `class` == 'tested_positive'", key: pedi}
+
+  # Impossible: the data has no such columns. The agent must fail, not invent them.
+  - id: wr-impossible-adult-income-by-state
+    dataset: adult
+    columns: [age, education, hours-per-week]
+    request: Average yearly income in dollars for each US state.
+    expect_status: failed
+    tags: [impossible]
+    checks:
+      - {kind: no_output}
+
+  - id: wr-impossible-telco-revenue-by-region
+    dataset: telco-customer-churn
+    columns: [Contract, MonthlyCharges, tenure]
+    request: Total revenue for each sales region and product line.
+    expect_status: failed
+    tags: [impossible]
+    checks:
+      - {kind: no_output}

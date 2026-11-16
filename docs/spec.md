@@ -243,3 +243,26 @@ given a recorder. File: `runs/dataquorum.duckdb` (git-ignored); one writer proce
 - Parity (`evals/parity/`): runs the original from its own venv on the same tasks, through a
   subprocess adapter, with the same model. Reports pass rate, false-success rate and cost
   for both.
+
+Implemented (week 6), all in `src/dataquorum/evals/`:
+- `datasets.py`: adult (1590 v2), credit-g (31), telco-customer-churn (42178),
+  ames-housing (41211), diabetes (37). Cached as Parquet in `data/openml/` (git-ignored;
+  `uv sync --group evals` for the `openml` package). Pinned by a **content** hash that
+  normalises text columns, so it is identical under pandas 2 and pandas 3.
+- `faults.py`: placeholders, missing, currency_text, thousands_suffix, category_variants,
+  outliers (exposes a threshold for the request text), duplicates, plus two "natural"
+  faults that only define the expected repair (parse_numeric_text, zero_means_missing).
+  Each fault updates both the messy input and the **expected output**.
+- `tasks/*.yaml`: 55 tasks (25 cleaning, 20 wrangling, 10 visualization; 3 impossible
+  requests that must end `failed`). `tasks.py` loads and builds them (drop natural
+  duplicates, seeded sample, faults, request facts).
+- `checkers.py`: matches_expected, row_count, columns_kept, no_missing, aggregate (groups
+  by name, values by number, so result column names are free), filter_rows,
+  derived_column, figure_type, figure_aggregate (reads Plotly typed arrays and raw
+  histograms), figure_point_count, no_output. A raising checker counts as failed.
+- `oracle.py`: every task must pass with a reference answer and fail with the untouched
+  input (`python -m dataquorum.evals.oracle`; also a test when data is cached).
+- `scoring.py`: outcomes correct / flagged / honest_failure / false_failure /
+  false_success; **false-success rate** is the headline metric.
+- `runner.py`: parallel runs, one model and effort per run (no fallback), budget guard in
+  eval mode stops the run, results in `runs/evals/<id>/` and DuckDB (`eval_task_id`).

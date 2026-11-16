@@ -1,0 +1,303 @@
+# Cleaning tasks: a clean OpenML sample is damaged by seeded faults; the agent must repair
+# exactly what the request asks, and the output is compared value-by-value with the answer.
+defaults:
+  agent: data_cleaning
+  rows: 300
+  tags: [cleaning]
+
+tasks:
+  # ---------------------------------------------------------------- adult
+  - id: clean-adult-capital-gain-currency
+    dataset: adult
+    columns: [age, workclass, education, capital-gain, hours-per-week]
+    faults: [{kind: currency_text, column: capital-gain}]
+    request: >-
+      capital-gain is stored as dollar text like "$1,234.00". Convert it to a float number of
+      dollars. Keep every row and column in the same order and do not change other columns.
+    checks:
+      - {kind: matches_expected, columns: [capital-gain, age, hours-per-week]}
+      - {kind: columns_kept}
+
+  - id: clean-adult-fnlwgt-thousands
+    dataset: adult
+    columns: [age, sex, fnlwgt, hours-per-week]
+    faults: [{kind: thousands_suffix, column: fnlwgt}]
+    request: >-
+      fnlwgt is stored as text where "226.8k" means 226800 and plain numbers have no suffix.
+      Convert fnlwgt to float. Keep every row and column in the same order.
+    checks:
+      - {kind: matches_expected, columns: [fnlwgt]}
+      - {kind: columns_kept}
+
+  - id: clean-adult-hours-placeholders
+    dataset: adult
+    columns: [age, education, hours-per-week, sex]
+    faults: [{kind: placeholders, column: hours-per-week, frac: 0.1}]
+    request: >-
+      hours-per-week is text and uses "n/a", "N/A", "-" and empty strings for unknown values.
+      Convert it to float with those markers as missing (NaN). Do not fill missing values.
+      Keep every row and column in the same order.
+    checks:
+      - {kind: matches_expected, columns: [hours-per-week]}
+      - {kind: columns_kept}
+
+  - id: clean-adult-hours-placeholders-median
+    dataset: adult
+    columns: [age, education, hours-per-week, sex]
+    seed: 11
+    faults: [{kind: placeholders, column: hours-per-week, frac: 0.1, expect: median}]
+    request: >-
+      hours-per-week is text and uses "n/a", "N/A", "-" and empty strings for unknown values.
+      Convert it to float, then fill the unknown values with the median of the known values.
+      Keep every row and column in the same order.
+    checks:
+      - {kind: matches_expected, columns: [hours-per-week]}
+      - {kind: no_missing, columns: [hours-per-week]}
+
+  - id: clean-adult-workclass-labels
+    dataset: adult
+    columns: [age, workclass, hours-per-week]
+    faults: [{kind: category_variants, column: workclass, frac: 0.2}]
+    request: >-
+      Some workclass labels have the wrong letter case or extra spaces (for example
+      "PRIVATE" or " Private "). Rewrite each label to the spelling used by most rows. Leave
+      missing values missing. Keep every row and column in the same order.
+    checks:
+      - {kind: matches_expected, columns: [workclass]}
+
+  - id: clean-adult-education-labels
+    dataset: adult
+    columns: [education, education-num, race]
+    seed: 3
+    faults: [{kind: category_variants, column: education, frac: 0.25}]
+    request: >-
+      Some education labels have the wrong letter case or extra spaces. Rewrite each one to
+      the spelling used by most rows. Keep every row and column in the same order.
+    checks:
+      - {kind: matches_expected, columns: [education, education-num]}
+
+  - id: clean-adult-duplicates
+    dataset: adult
+    columns: [age, education, occupation, hours-per-week, fnlwgt]
+    faults: [{kind: duplicates, frac: 0.1}]
+    request: >-
+      Remove exact duplicate rows, keeping the first occurrence and the original order.
+      Do not change any values.
+    checks:
+      - {kind: row_count}
+      - {kind: matches_expected, columns: [age, education, hours-per-week, fnlwgt]}
+
+  - id: clean-adult-age-outliers
+    dataset: adult
+    columns: [age, sex, hours-per-week]
+    faults: [{kind: outliers, column: age, frac: 0.03}]
+    request: >-
+      A few age values were typed 1000 times too large; every one of them is above
+      {age_threshold}. Set those age values to missing (NaN) and leave all other values as they
+      are. Keep every row and column in the same order.
+    checks:
+      - {kind: matches_expected, columns: [age, hours-per-week]}
+
+  - id: clean-adult-combined
+    dataset: adult
+    columns: [age, sex, capital-gain, hours-per-week, fnlwgt]
+    seed: 21
+    faults:
+      - {kind: currency_text, column: capital-gain}
+      - {kind: category_variants, column: sex, frac: 0.2}
+      - {kind: duplicates, frac: 0.05}
+    request: >-
+      Clean this table: (1) convert capital-gain from dollar text like "$1,234.00" to float,
+      (2) fix sex labels with wrong case or extra spaces to the spelling used by most rows,
+      (3) remove exact duplicate rows, keeping the first occurrence and the original order.
+    checks:
+      - {kind: row_count}
+      - {kind: matches_expected, columns: [capital-gain, sex, fnlwgt]}
+
+  # ---------------------------------------------------------------- credit-g
+  - id: clean-credit-amount-currency
+    dataset: credit-g
+    columns: [purpose, credit_amount, duration, housing]
+    faults: [{kind: currency_text, column: credit_amount}]
+    request: >-
+      credit_amount is dollar text like "$1,169.00". Convert it to float. Keep every row and
+      column in the same order.
+    checks:
+      - {kind: matches_expected, columns: [credit_amount, duration]}
+
+  - id: clean-credit-amount-thousands
+    dataset: credit-g
+    columns: [purpose, credit_amount, age]
+    seed: 5
+    faults: [{kind: thousands_suffix, column: credit_amount}]
+    request: >-
+      credit_amount is text where "5.951k" means 5951 and values under 1000 have no suffix.
+      Convert it to float. Keep every row and column in the same order.
+    checks:
+      - {kind: matches_expected, columns: [credit_amount]}
+
+  - id: clean-credit-duration-placeholders-median
+    dataset: credit-g
+    columns: [duration, credit_amount, job]
+    faults: [{kind: placeholders, column: duration, frac: 0.12, expect: median}]
+    request: >-
+      duration is text with "n/a", "N/A", "-" or empty strings for unknown values. Convert it
+      to float and fill the unknown values with the median of the known durations. Keep every
+      row and column in the same order.
+    checks:
+      - {kind: matches_expected, columns: [duration]}
+      - {kind: no_missing, columns: [duration]}
+
+  - id: clean-credit-purpose-labels
+    dataset: credit-g
+    columns: [purpose, credit_amount, housing]
+    faults: [{kind: category_variants, column: purpose, frac: 0.2}]
+    request: >-
+      Some purpose labels have the wrong letter case or extra spaces. Rewrite each one to the
+      spelling used by most rows. Keep every row and column in the same order.
+    checks:
+      - {kind: matches_expected, columns: [purpose, credit_amount]}
+
+  - id: clean-credit-housing-mode
+    dataset: credit-g
+    columns: [housing, age, job]
+    faults: [{kind: missing, column: housing, frac: 0.1, expect: mode}]
+    request: >-
+      Fill the missing housing values with the most common housing value. Keep every row and
+      column in the same order.
+    checks:
+      - {kind: matches_expected, columns: [housing]}
+      - {kind: no_missing, columns: [housing]}
+
+  - id: clean-credit-combined
+    dataset: credit-g
+    columns: [age, purpose, credit_amount, duration]
+    seed: 13
+    faults:
+      - {kind: placeholders, column: age, frac: 0.08, expect: median}
+      - {kind: category_variants, column: purpose, frac: 0.15}
+      - {kind: duplicates, frac: 0.05}
+    request: >-
+      Clean this table in this order: (1) remove exact duplicate rows, keeping the first
+      occurrence and the original order; (2) age is text with "n/a", "N/A", "-" or "" for
+      unknown values: convert it to float and fill unknown values with the median of the known
+      ages (computed after step 1); (3) fix purpose labels with wrong case or extra spaces to
+      the spelling used by most rows.
+    checks:
+      - {kind: row_count}
+      - {kind: matches_expected, columns: [age, purpose, credit_amount]}
+
+  # ---------------------------------------------------------------- telco
+  - id: clean-telco-total-charges
+    dataset: telco-customer-churn
+    columns: [tenure, Contract, MonthlyCharges, TotalCharges]
+    rows: 2000
+    faults: [{kind: parse_numeric_text, column: TotalCharges}]
+    request: >-
+      TotalCharges is stored as text and some values are blank. Convert it to float with blank
+      values as missing (NaN). Keep every row and column in the same order.
+    checks:
+      - {kind: matches_expected, columns: [TotalCharges, MonthlyCharges]}
+
+  - id: clean-telco-monthly-currency
+    dataset: telco-customer-churn
+    columns: [Contract, MonthlyCharges, Churn]
+    faults: [{kind: currency_text, column: MonthlyCharges}]
+    request: >-
+      MonthlyCharges is dollar text like "$70.35". Convert it to float. Keep every row and
+      column in the same order.
+    checks:
+      - {kind: matches_expected, columns: [MonthlyCharges]}
+
+  - id: clean-telco-labels
+    dataset: telco-customer-churn
+    columns: [Contract, PaymentMethod, MonthlyCharges]
+    faults:
+      - {kind: category_variants, column: Contract, frac: 0.2}
+      - {kind: category_variants, column: PaymentMethod, frac: 0.2}
+    request: >-
+      Contract and PaymentMethod labels sometimes have the wrong letter case or extra spaces.
+      Rewrite each label to the spelling used by most rows. Keep every row and column in the
+      same order.
+    checks:
+      - {kind: matches_expected, columns: [Contract, PaymentMethod]}
+
+  - id: clean-telco-tenure-outliers
+    dataset: telco-customer-churn
+    columns: [tenure, Contract, MonthlyCharges]
+    faults: [{kind: outliers, column: tenure, frac: 0.03}]
+    request: >-
+      A few tenure values were typed 1000 times too large; all of them are above
+      {tenure_threshold}. Set those tenure values to missing (NaN). Keep every row and column
+      in the same order.
+    checks:
+      - {kind: matches_expected, columns: [tenure]}
+
+  # ---------------------------------------------------------------- ames
+  - id: clean-ames-price-currency
+    dataset: ames-housing
+    columns: [Neighborhood, Gr_Liv_Area, Year_Built, Sale_Price]
+    faults: [{kind: currency_text, column: Sale_Price}]
+    request: >-
+      Sale_Price is dollar text like "$215,000.00". Convert it to float. Keep every row and
+      column in the same order.
+    checks:
+      - {kind: matches_expected, columns: [Sale_Price, Gr_Liv_Area]}
+
+  - id: clean-ames-lot-area-thousands
+    dataset: ames-housing
+    columns: [Lot_Area, Neighborhood, Sale_Price]
+    faults: [{kind: thousands_suffix, column: Lot_Area}]
+    request: >-
+      Lot_Area is text where "11.622k" means 11622 and values under 1000 have no suffix.
+      Convert it to float. Keep every row and column in the same order.
+    checks:
+      - {kind: matches_expected, columns: [Lot_Area]}
+
+  - id: clean-ames-living-area-median
+    dataset: ames-housing
+    columns: [Gr_Liv_Area, Bldg_Type, Sale_Price]
+    faults: [{kind: missing, column: Gr_Liv_Area, frac: 0.1, expect: median}]
+    request: >-
+      Fill the missing Gr_Liv_Area values with the median of the known values. Keep every row
+      and column in the same order.
+    checks:
+      - {kind: matches_expected, columns: [Gr_Liv_Area]}
+      - {kind: no_missing, columns: [Gr_Liv_Area]}
+
+  - id: clean-ames-neighborhood-labels
+    dataset: ames-housing
+    columns: [Neighborhood, Sale_Price]
+    faults: [{kind: category_variants, column: Neighborhood, frac: 0.2}]
+    request: >-
+      Some Neighborhood labels have the wrong letter case or extra spaces. Rewrite each one to
+      the spelling used by most rows. Keep every row and column in the same order.
+    checks:
+      - {kind: matches_expected, columns: [Neighborhood]}
+
+  # ---------------------------------------------------------------- diabetes
+  - id: clean-diabetes-zeros
+    dataset: diabetes
+    faults:
+      - {kind: zero_means_missing, column: pres}
+      - {kind: zero_means_missing, column: skin}
+      - {kind: zero_means_missing, column: mass}
+    request: >-
+      In pres, skin and mass a value of 0 means "not measured". Replace 0 with missing (NaN)
+      in those three columns only. Keep every row and column in the same order.
+    checks:
+      - {kind: matches_expected, columns: [pres, skin, mass, preg, insu]}
+
+  - id: clean-diabetes-combined
+    dataset: diabetes
+    seed: 17
+    faults:
+      - {kind: placeholders, column: plas, frac: 0.08}
+      - {kind: outliers, column: mass, frac: 0.03}
+    request: >-
+      (1) plas is text with "n/a", "N/A", "-" or "" for unknown values; convert it to float
+      with those as missing. (2) A few mass values were typed 1000 times too large; all are
+      above {mass_threshold}; set them to missing. Do not fill missing values. Keep every row
+      and column in the same order.
+    checks:
+      - {kind: matches_expected, columns: [plas, mass, age]}

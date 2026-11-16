@@ -21,8 +21,9 @@ htmlcov/
 # Original project (parity reference), cloned locally with its own venv
 .original/
 
-# Local run data
+# Local run data and cached datasets
 runs/
+data/
 mlruns/
 *.duckdb
 *.duckdb.wal

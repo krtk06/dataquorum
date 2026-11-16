@@ -24,6 +24,7 @@ dependencies = [
     "pyarrow>=26.0.1",
     "pydantic>=2.14.3",
     "python-dotenv>=1.2.4",
+    "pyyaml>=6.0.3",
 ]
 
 [project.urls]
@@ -61,6 +62,10 @@ dev = [
     "pytest>=9.2.0",
     "ruff>=0.17.5",
     "types-docker>=7.2.0.20261102",
+    "types-pyyaml>=6.0.12.20261113",
+]
+evals = [
+    "openml>=0.15.1",
 ]
 
 [[tool.mypy.overrides]]
@@ -73,3 +78,12 @@ known-third-party = ["docker"]
 [tool.ruff.lint.per-file-ignores]
 # Escape probes are code strings that read best on one line each.
 "tests/sandbox/test_escapes.py" = ["E501"]
+# Checkers compare values in compact one-line expressions.
+"src/dataquorum/evals/checkers.py" = ["E501"]
+"src/dataquorum/evals/scoring.py" = ["E501"]
+"src/dataquorum/evals/runner.py" = ["E501"]
+"tests/test_evals.py" = ["E501"]
+
+[[tool.mypy.overrides]]
+module = ["openml", "openml.*"]
+ignore_missing_imports = true

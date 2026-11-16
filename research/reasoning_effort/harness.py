@@ -3,6 +3,7 @@ and checks the result against the known correct answer. Prints one JSON line."""
 
 import json
 import math
+from typing import Any
 
 import pandas as pd
 
@@ -20,7 +21,7 @@ EXPECTED_CITY = [
 ]  # fmt: skip
 
 
-def same_floats(actual, expected):
+def same_floats(actual: list[Any], expected: list[Any]) -> bool:
     if len(actual) != len(expected):
         return False
     for a, e in zip(actual, expected, strict=True):
@@ -32,12 +33,12 @@ def same_floats(actual, expected):
     return True
 
 
-def main():
+def main() -> None:
     checks = {"ran": False, "is_dataframe": False, "rows_kept": False,
               "income_correct": False, "city_correct": False, "age_untouched": False}  # fmt: skip
     error = None
     try:
-        namespace = {}
+        namespace: dict[str, Any] = {}
         with open("/io/in/code.py", encoding="utf-8") as f:
             exec(f.read(), namespace)
         df = pd.DataFrame({"age": AGE, "income": INCOME, "city": CITY})

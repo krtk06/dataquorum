@@ -88,7 +88,12 @@ def code_messages(
 ) -> list[Message]:
     system = f"{spec.role}\n\n{_CODE_RULES[spec.output_kind]}\n\n{spec.code_guidance}"
     numbered = "\n".join(f"{i}. {s}" for i, s in enumerate(steps, 1))
-    user = _context(request, data_summary, review_notes) + f"\n\nSteps to implement:\n{numbered}"
+    plan = (
+        f"Steps to implement:\n{numbered}"
+        if steps
+        else "No step plan was made; work out the steps from the request yourself."
+    )
+    user = _context(request, data_summary, review_notes) + f"\n\n{plan}"
     if previous_code is not None and problem:
         user += (
             f"\n\nYour previous code did not work.\nProblem: {problem}\n\n"

@@ -17,7 +17,7 @@ from dataquorum.evals import datasets
 from dataquorum.evals.checkers import CHECKERS, CheckOutcome, run_checker
 from dataquorum.evals.faults import FAULTS, FaultSpec, apply_faults
 from dataquorum.evals.oracle import check_task
-from dataquorum.evals.runner import run_eval
+from dataquorum.evals.runner import RunOptions, run_eval
 from dataquorum.evals.scoring import classify, summarise
 from dataquorum.evals.tasks import Task, build, load_tasks
 
@@ -177,7 +177,7 @@ def test_runner_scores_and_records_outcomes(tmp_path: Path) -> None:
     out.mkdir()
     results, stopped = run_eval(
         [good_task, bad_task], llm_factory=lambda: llm, executor=InProcessExecutor(),
-        recorder=None, out_dir=out, workers=1, max_retries=0,
+        recorder=None, out_dir=out, workers=1, options=RunOptions(max_retries=0),
     )  # fmt: skip
     assert stopped is None
     by_id = {r.task_id: r for r in results}
@@ -187,3 +187,55 @@ def test_runner_scores_and_records_outcomes(tmp_path: Path) -> None:
     assert summarise(results)["overall"]["false_success"] == 1
     assert len((out / "results.jsonl").read_text(encoding="utf-8").splitlines()) == 2
     assert np.isclose(sum(r.allowance_usd for r in results), 0.004)
+
+
+def test_repeats_and_ablations(tmp_path: Path) -> None:
+    fix = (
+        "import pandas as pd\ndef transform(df):\n    return df.assign("
+        "amount=pd.to_numeric(df['amount'].str.replace('$', '').str.replace(',', '')))\n"
+    )
+    noop = "def transform(df):\n    return df\n"
+    t = task(id="rep", faults=[{"kind": "currency_text", "column": "amount"}],
+             checks=[{"kind": "matches_expected", "columns": ["amount"]}])  # fmt: skip
+    # --no-recommend: no RecommendedSteps calls; --repeats 3: three attempts, one wrong.
+    llm = ScriptedLLM(GeneratedCode(python_code=fix), GeneratedCode(python_code=fix),
+                      GeneratedCode(python_code=noop))  # fmt: skip
+    out = tmp_path / "eval"
+    out.mkdir()
+    options = RunOptions(max_retries=0, no_checks=True, no_recommend=True, repeats=3)
+    results, _ = run_eval([t], llm_factory=lambda: llm, executor=InProcessExecutor(),
+                          recorder=None, out_dir=out, workers=1, options=options)  # fmt: skip
+    assert sorted(r.repeat for r in results) == [0, 1, 2]
+    assert all(r.calls == 1 for r in results)  # one GeneratedCode call each, no recommend
+    assert llm.prompts_for("RecommendedSteps") == []
+    assert "No step plan was made" in llm.prompts_for("GeneratedCode")[0]
+    summary = summarise(results)
+    assert summary["overall"]["correct"] == 2
+    assert summary["pass_at_k"]["pass@1"] == pytest.approx(2 / 3, abs=1e-4)
+    assert summary["pass_at_k"]["pass@2"] == 1.0
+
+
+def test_compare_two_runs(tmp_path: Path) -> None:
+    from dataquorum.evals.compare import compare
+
+    def write_run(name: str, outcomes: dict[str, str], cost: float) -> Path:
+        d = tmp_path / name
+        d.mkdir()
+        meta = {"eval_id": name, "label": name, "model": "m", "reasoning_effort": "low",
+                "options": {"max_retries": 2, "no_checks": name == "b"}}  # fmt: skip
+        (d / "summary.json").write_text(json.dumps(meta), encoding="utf-8")
+        rows = [{"task_id": t, "outcome": o, "allowance_usd": cost, "seconds": 1.0}
+                for t, o in outcomes.items()]  # fmt: skip
+        lines = [json.dumps(r) for r in rows]
+        (d / "results.jsonl").write_text(chr(10).join(lines), encoding="utf-8")
+        return d
+
+    a = write_run("a", {f"t{i}": "correct" for i in range(10)}, 0.001)
+    b = write_run("b", {**{f"t{i}": "correct" for i in range(6)},
+                        **{f"t{i}": "false_success" for i in range(6, 10)}}, 0.002)  # fmt: skip
+    report = compare(a, b)
+    assert "10/10 (100%" in report and "6/10 (60%" in report
+    assert "only A correct = 4, only B correct = 0, p = 0.125" in report
+    assert "B - A cost per task: +0.001" in report
+    assert "- t6: A ['correct'] -> B ['false_success']" in report
+    assert "no_checks" in report

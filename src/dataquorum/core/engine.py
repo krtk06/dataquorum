@@ -249,7 +249,10 @@ def after_validate(s: EngineState) -> str:
     return "generate" if failed and s.attempts <= s.max_retries else "finalize"
 
 
-def build_graph(spec: AgentSpec, llm: StructuredLLM, executor: Executor) -> StateGraph[Any]:
+def build_graph(
+    spec: AgentSpec, llm: StructuredLLM, executor: Executor, *, skip_recommend: bool = False
+) -> StateGraph[Any]:
+    """`skip_recommend` is an ablation: code is generated straight from the request."""
     n = Nodes(spec, llm, executor)
     g: StateGraph[Any] = StateGraph(EngineState)
     for name in (
@@ -263,7 +266,7 @@ def build_graph(spec: AgentSpec, llm: StructuredLLM, executor: Executor) -> Stat
     ):
         g.add_node(name, getattr(n, name))
     g.add_edge(START, "summarize")
-    g.add_edge("summarize", "recommend")
+    g.add_edge("summarize", "generate" if skip_recommend else "recommend")
     g.add_conditional_edges("recommend", after_recommend, ["human_review", "generate", "finalize"])
     g.add_conditional_edges("human_review", after_review, ["recommend", "generate", "finalize"])
     g.add_edge("generate", "execute")
@@ -321,13 +324,15 @@ class Engine:
         checkpointer: BaseCheckpointSaver[Any] | None = None,
         max_retries: int = 3,
         recorder: ResultSink | None = None,
+        skip_recommend: bool = False,
     ) -> None:
         self.spec = spec
         self.runs_dir = runs_dir
         self.max_retries = max_retries
         self.recorder = recorder
         saver = checkpointer or InMemorySaver(serde=checkpoint_serializer())
-        self.app = build_graph(spec, llm, executor).compile(checkpointer=saver)
+        graph = build_graph(spec, llm, executor, skip_recommend=skip_recommend)
+        self.app = graph.compile(checkpointer=saver)
 
     def start(
         self,

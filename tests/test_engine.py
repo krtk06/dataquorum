@@ -188,3 +188,30 @@ def test_checkpoint_types_are_registered(data: pd.DataFrame, tmp_path: Path) -> 
         engine.resume(paused.run_id, "ok")
     unregistered = [str(w.message) for w in caught if "unregistered type" in str(w.message)]
     assert unregistered == []
+
+
+BLOCKED = RecommendedSteps(steps=[], blocker="The data has no product_category column.")
+
+
+def test_blocker_stops_before_any_code_is_generated(data: pd.DataFrame, tmp_path: Path) -> None:
+    llm = ScriptedLLM(BLOCKED)
+    result = make_engine(llm, tmp_path).start(data, "revenue by product category").result
+
+    assert result is not None and result.status is Status.FAILED
+    assert result.error == (
+        "Cannot do this with the given data: The data has no product_category column."
+    )
+    assert llm.prompts_for("GeneratedCode") == []
+    assert (result.usage.calls, result.usage.retries) == (1, 0)
+
+
+def test_blocker_skips_human_review(data: pd.DataFrame, tmp_path: Path) -> None:
+    run = make_engine(ScriptedLLM(BLOCKED), tmp_path).start(data, "x", human_review=True)
+    assert not run.paused
+    assert run.result is not None and run.result.status is Status.FAILED
+
+
+def test_blank_blocker_is_ignored(data: pd.DataFrame, tmp_path: Path) -> None:
+    llm = ScriptedLLM(RecommendedSteps(steps=STEPS.steps, blocker="  "), GOOD)
+    result = make_engine(llm, tmp_path).start(data, REQUEST).result
+    assert result is not None and result.status is Status.SUCCESS

@@ -33,7 +33,7 @@ from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import Command, interrupt
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from dataquorum.core import prompts
 from dataquorum.core.agent_spec import AgentSpec
@@ -63,6 +63,13 @@ class StructuredLLM(Protocol):
 
 class RecommendedSteps(BaseModel):
     steps: list[str]
+    blocker: str | None = Field(
+        default=None,
+        description=(
+            "Set only when the request cannot be done with this data, for example it needs "
+            "a column that does not exist. Say what is missing. Otherwise null."
+        ),
+    )
 
 
 class GeneratedCode(BaseModel):
@@ -82,6 +89,7 @@ class EngineState(BaseModel):
     review_notes: list[str] = []
     review_kind: Literal["approve", "revise", "reject"] | None = None
     rejected_reason: str | None = None
+    blocker: str | None = None  # recommend found the request impossible with this data
     code: str | None = None
     error: str | None = None
     output_path: str | None = None
@@ -110,7 +118,13 @@ class Nodes:
             )
         except LLMError as exc:
             return {"error": f"Recommending steps failed: {exc}", "usage": s.usage + exc.usage}
-        return {"steps": out.value.steps, "error": None, "usage": s.usage + out.usage}
+        blocker = (out.value.blocker or "").strip() or None
+        return {
+            "steps": out.value.steps,
+            "blocker": blocker,
+            "error": None,
+            "usage": s.usage + out.usage,
+        }
 
     def human_review(self, s: EngineState) -> dict[str, Any]:
         answer = interrupt(
@@ -199,7 +213,13 @@ class Nodes:
                 output = FigureOutput(figure=loaded)
             else:
                 output = DataFrameOutput.save(loaded, Path(s.workdir) / "result.parquet")
-        error = f"Rejected by reviewer: {s.rejected_reason}" if rejected else s.error
+        error: str | None
+        if rejected:
+            error = f"Rejected by reviewer: {s.rejected_reason}"
+        elif s.blocker:
+            error = f"Cannot do this with the given data: {s.blocker}"
+        else:
+            error = s.error
         retries = s.usage.retries + max(s.attempts - 1, 0)
         result = AgentResult.from_run(
             run_id=s.run_id,
@@ -215,7 +235,7 @@ class Nodes:
 
 
 def after_recommend(s: EngineState) -> str:
-    if s.error:
+    if s.error or s.blocker:  # nothing worth generating code for
         return "finalize"
     return "human_review" if s.human_review else "generate"
 

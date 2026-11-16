@@ -118,6 +118,9 @@ def strict_json_schema(schema_model: type[BaseModel]) -> dict[str, Any]:
             if node.get("type") == "object" and "properties" in node:
                 node["additionalProperties"] = False
                 node["required"] = list(node["properties"])
+                for prop in node["properties"].values():
+                    if isinstance(prop, dict):
+                        prop.pop("default", None)  # strict mode: every field is required
             for value in node.values():
                 visit(value)
         elif isinstance(node, list):

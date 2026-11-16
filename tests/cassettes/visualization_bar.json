@@ -8,7 +8,7 @@
         "messages": [
           {
             "role": "system",
-            "content": "You are a data-visualization agent that builds clear Plotly charts.\n\nRecommend how to chart what the user asked for: the chart type and\nwhy, which columns go on which axis or encoding, any aggregation or sorting needed first,\nand the title and axis labels. Use only columns that exist in the data summary. Prefer\nsimple chart types (bar, line, scatter, histogram, box) unless the user asks otherwise.\n\nReturn a short ordered list of concrete steps. Each step should be one action a pandas function can perform. Do not include code."
+            "content": "You are a data-visualization agent that builds clear Plotly charts.\n\nRecommend how to chart what the user asked for: the chart type and\nwhy, which columns go on which axis or encoding, any aggregation or sorting needed first,\nand the title and axis labels. Use only columns that exist in the data summary. Prefer\nsimple chart types (bar, line, scatter, histogram, box) unless the user asks otherwise.\n\nReturn a short ordered list of concrete steps. Each step should be one action a pandas function can perform. Do not include code.\nIf the request cannot be done with this data (for example it needs a column that does not exist), set `blocker` to a short explanation of what is missing and return no steps. Do not substitute other columns unless the user asked for that. Otherwise set `blocker` to null."
           },
           {
             "role": "user",
@@ -28,10 +28,23 @@
                   },
                   "title": "Steps",
                   "type": "array"
+                },
+                "blocker": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "Set only when the request cannot be done with this data, for example it needs a column that does not exist. Say what is missing. Otherwise null.",
+                  "title": "Blocker"
                 }
               },
               "required": [
-                "steps"
+                "steps",
+                "blocker"
               ],
               "title": "RecommendedSteps",
               "type": "object",
@@ -45,9 +58,9 @@
     "response": {
       "status": 200,
       "body": {
-        "id": "gw-2a5a3e22439a-77f92c",
+        "id": "gw-2a538a5c39f0-7da64a",
         "object": "chat.completion",
-        "created": 1794813128,
+        "created": 1794813458,
         "model": "deepseek-v4.1-flash",
         "choices": [
           {
@@ -55,30 +68,30 @@
             "finish_reason": "stop",
             "message": {
               "role": "assistant",
-              "content": "{\"steps\": [\n  \"Select only the needed columns: region and revenue.\",\n  \"Group the data by region and sum revenue to get total revenue per region (aggregation is required because regions repeat across orders).\",\n  \"Reset the index so the grouped result becomes a two-column table with region and total revenue.\",\n  \"Sort the aggregated rows by total revenue in descending order so the tallest bar appears first.\",\n  \"Render a vertical bar chart with region on the x-axis and total revenue on the y-axis, using one bar per region.\",\n  \"Title the chart 'Total Revenue by Region' and label the axes 'Region' and 'Total Revenue'.\",\n  \"Optionally annotate each bar with its total revenue value for readability.\"\n]}",
-              "reasoning_content": "The user wants a bar chart of total revenue by region. Need aggregation (sum) by region, then bar chart. Provide ordered steps."
+              "content": "{\n  \"steps\": [\n    \"Group the data by `region` and sum the `revenue` column (e.g., `df.groupby('region')['revenue'].sum()`).\",\n    \"Reset the index so `region` becomes a column and the summed values are named something like `total_revenue`.\",\n    \"Sort the result by `total_revenue` in descending order.\",\n    \"Plot a vertical bar chart with `region` on the x-axis and `total_revenue` on the y-axis, one bar per region.\",\n    \"Set the title to 'Total Revenue by Region' and label the axes 'Region' (x) and 'Total Revenue' (y).\"\n  ],\n  \"blocker\": null\n}",
+              "reasoning_content": "Simple: group by region sum revenue, sort descending, bar chart."
             }
           }
         ],
         "usage": {
-          "prompt_tokens": 465,
-          "completion_tokens": 181,
-          "total_tokens": 646,
+          "prompt_tokens": 525,
+          "completion_tokens": 171,
+          "total_tokens": 696,
           "prompt_tokens_details": {
             "cached_tokens": 0
           },
           "completion_tokens_details": {
-            "reasoning_tokens": 28
+            "reasoning_tokens": 14
           },
           "cost": 0,
           "opencode": {
             "billing_source": "go",
-            "list_cost": 0.0003567,
-            "allowance": 0.00021402,
+            "list_cost": 0.0003627,
+            "allowance": 0.00021762,
             "tokens": {
-              "input": 465,
-              "output": 181,
-              "reasoning": 28,
+              "input": 525,
+              "output": 171,
+              "reasoning": 14,
               "cache_read": 0,
               "cache_write_5m": 0,
               "cache_write_1h": 0
@@ -101,7 +114,7 @@
           },
           {
             "role": "user",
-            "content": "User request (verbatim):\nBar chart of total revenue by region.\n\nData summary:\nShape: 8 rows x 4 columns\nColumns:\n- order_id: dtype=int64, missing_or_placeholder=0\n- region: dtype=object, missing_or_placeholder=0, distinct=4\n- revenue: dtype=float64, missing_or_placeholder=0\n- units: dtype=int64, missing_or_placeholder=0\nFirst 8 rows: [{'order_id': 1, 'region': 'North', 'revenue': 120.0, 'units': 3}, {'order_id': 2, 'region': 'South', 'revenue': 80.5, 'units': 2}, {'order_id': 3, 'region': 'North', 'revenue': 99.9, 'units': 2}, {'order_id': 4, 'region': 'East', 'revenue': 45.0, 'units': 1}, {'order_id': 5, 'region': 'South', 'revenue': 60.0, 'units': 2}, {'order_id': 6, 'region': 'East', 'revenue': 30.25, 'units': 1}, {'order_id': 7, 'region': 'North', 'revenue': 75.0, 'units': 3}, {'order_id': 8, 'region': 'West', 'revenue': 52.0, 'units': 1}]\n\nSteps to implement:\n1. Select only the needed columns: region and revenue.\n2. Group the data by region and sum revenue to get total revenue per region (aggregation is required because regions repeat across orders).\n3. Reset the index so the grouped result becomes a two-column table with region and total revenue.\n4. Sort the aggregated rows by total revenue in descending order so the tallest bar appears first.\n5. Render a vertical bar chart with region on the x-axis and total revenue on the y-axis, using one bar per region.\n6. Title the chart 'Total Revenue by Region' and label the axes 'Region' and 'Total Revenue'.\n7. Optionally annotate each bar with its total revenue value for readability."
+            "content": "User request (verbatim):\nBar chart of total revenue by region.\n\nData summary:\nShape: 8 rows x 4 columns\nColumns:\n- order_id: dtype=int64, missing_or_placeholder=0\n- region: dtype=object, missing_or_placeholder=0, distinct=4\n- revenue: dtype=float64, missing_or_placeholder=0\n- units: dtype=int64, missing_or_placeholder=0\nFirst 8 rows: [{'order_id': 1, 'region': 'North', 'revenue': 120.0, 'units': 3}, {'order_id': 2, 'region': 'South', 'revenue': 80.5, 'units': 2}, {'order_id': 3, 'region': 'North', 'revenue': 99.9, 'units': 2}, {'order_id': 4, 'region': 'East', 'revenue': 45.0, 'units': 1}, {'order_id': 5, 'region': 'South', 'revenue': 60.0, 'units': 2}, {'order_id': 6, 'region': 'East', 'revenue': 30.25, 'units': 1}, {'order_id': 7, 'region': 'North', 'revenue': 75.0, 'units': 3}, {'order_id': 8, 'region': 'West', 'revenue': 52.0, 'units': 1}]\n\nSteps to implement:\n1. Group the data by `region` and sum the `revenue` column (e.g., `df.groupby('region')['revenue'].sum()`).\n2. Reset the index so `region` becomes a column and the summed values are named something like `total_revenue`.\n3. Sort the result by `total_revenue` in descending order.\n4. Plot a vertical bar chart with `region` on the x-axis and `total_revenue` on the y-axis, one bar per region.\n5. Set the title to 'Total Revenue by Region' and label the axes 'Region' (x) and 'Total Revenue' (y)."
           }
         ],
         "reasoning_effort": "low",
@@ -131,9 +144,9 @@
     "response": {
       "status": 200,
       "body": {
-        "id": "gw-2abd6f0cdecb-6f1167",
+        "id": "gw-2a5a3e22439a-788092",
         "object": "chat.completion",
-        "created": 1794813132,
+        "created": 1794813461,
         "model": "deepseek-v4.1-flash",
         "choices": [
           {
@@ -141,14 +154,14 @@
             "finish_reason": "stop",
             "message": {
               "role": "assistant",
-              "content": "{\"python_code\": \"import pandas as pd\\nimport numpy as np\\nimport plotly.express as px\\n\\n\\ndef make_figure(df: pd.DataFrame):\\n    data = df.copy()\\n    grouped = (\\n        data[['region', 'revenue']]\\n        .groupby('region', as_index=False)['revenue']\\n        .sum()\\n        .rename(columns={'revenue': 'total_revenue'})\\n        .sort_values('total_revenue', ascending=False)\\n    )\\n\\n    fig = px.bar(\\n        grouped,\\n        x='region',\\n        y='total_revenue',\\n        text='total_revenue',\\n        title='Total Revenue by Region',\\n        labels={'region': 'Region', 'total_revenue': 'Total Revenue'},\\n    )\\n\\n    fig.update_traces(texttemplate='%{text:.2f}', textposition='outside')\\n    fig.update_layout(\\n        xaxis_title='Region',\\n        yaxis_title='Total Revenue',\\n        yaxis=dict(rangemode='tozero'),\\n        margin=dict(t=60),\\n    )\\n\\n    return fig\\n\"}"
+              "content": "{\"python_code\":\"import pandas as pd\\nimport plotly.express as px\\n\\n\\ndef make_figure(df: pd.DataFrame):\\n    data = df.copy()\\n    agg = (\\n        data.groupby('region', as_index=False)['revenue']\\n        .sum()\\n        .rename(columns={'revenue': 'total_revenue'})\\n        .sort_values('total_revenue', ascending=False)\\n    )\\n    fig = px.bar(\\n        agg,\\n        x='region',\\n        y='total_revenue',\\n        title='Total Revenue by Region',\\n        labels={'region': 'Region', 'total_revenue': 'Total Revenue'},\\n    )\\n    fig.update_layout(xaxis_title='Region', yaxis_title='Total Revenue')\\n    return fig\\n\" }"
             }
           }
         ],
         "usage": {
-          "prompt_tokens": 685,
-          "completion_tokens": 273,
-          "total_tokens": 958,
+          "prompt_tokens": 677,
+          "completion_tokens": 187,
+          "total_tokens": 864,
           "prompt_tokens_details": {
             "cached_tokens": 0
           },
@@ -158,11 +171,11 @@
           "cost": 0,
           "opencode": {
             "billing_source": "go",
-            "list_cost": 0.0005331,
-            "allowance": 0.00031986,
+            "list_cost": 0.0004275,
+            "allowance": 0.0002565,
             "tokens": {
-              "input": 685,
-              "output": 273,
+              "input": 677,
+              "output": 187,
               "reasoning": 0,
               "cache_read": 0,
               "cache_write_5m": 0,

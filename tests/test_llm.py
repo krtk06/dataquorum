@@ -199,3 +199,11 @@ def test_strict_schema_closes_nested_objects() -> None:
     step = schema["$defs"]["Step"]
     assert step["additionalProperties"] is False
     assert step["required"] == ["name", "reason"]
+
+
+def test_strict_schema_drops_defaults() -> None:
+    from dataquorum.core.engine import RecommendedSteps
+
+    schema = strict_json_schema(RecommendedSteps)
+    assert schema["required"] == ["steps", "blocker"]
+    assert "default" not in json.dumps(schema)

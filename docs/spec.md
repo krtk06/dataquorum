@@ -161,6 +161,12 @@ column-drop warnings are off; must raise on missing columns rather than invent t
 `agents/visualization.py`. `agents.make_engine(spec)` wires Go, the budget guard, Docker and
 the recorder.
 
+Early stop (week 4): `RecommendedSteps` has a `blocker` field. When the request cannot be
+done with the data (for example a missing column), recommend sets it, the run skips review,
+code generation and retries, and ends `failed` with "Cannot do this with the given data:
+...". On the missing-column replay this cut cost from 3 calls / $0.00252 to 1 call /
+$0.00013. Strict schemas drop `default` keys, since every field is required.
+
 ## S7. Supervisor (`supervisor/`)
 
 The router returns a structured decision:

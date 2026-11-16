@@ -75,8 +75,8 @@ def test_wrangling_aggregates(tmp_path: Path) -> None:
 def test_wrangling_does_not_invent_columns(tmp_path: Path) -> None:
     """Same request that made the original return an empty table with invented columns.
 
-    Recorded 2026-11-16: recommend flagged the missing column, both code attempts raised
-    ValueError naming it, and the run ended `failed` (3 LLM calls).
+    With the recommend-step blocker the run stops after one LLM call: no code is generated
+    and no retry is spent.
     """
     result = run_agent(
         "data_wrangling",
@@ -85,9 +85,11 @@ def test_wrangling_does_not_invent_columns(tmp_path: Path) -> None:
         tmp_path,
     )
     assert result.status is Status.FAILED
-    assert result.output is None
-    assert result.error is not None and "product_category" in result.error
-    assert "no product category column" in result.steps[0]
+    assert result.output is None and result.code is None
+    assert result.error is not None
+    assert result.error.startswith("Cannot do this with the given data:")
+    assert "categor" in result.error.lower()
+    assert result.usage.calls == 1
 
 
 def test_visualization_bar_chart(tmp_path: Path) -> None:

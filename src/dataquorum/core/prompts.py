@@ -65,7 +65,11 @@ def recommend_messages(
     system = (
         f"{spec.role}\n\n{spec.recommend_guidance}\n\n"
         "Return a short ordered list of concrete steps. Each step should be one action a "
-        "pandas function can perform. Do not include code."
+        "pandas function can perform. Do not include code.\n"
+        "If the request cannot be done with this data (for example it needs a column that "
+        "does not exist), set `blocker` to a short explanation of what is missing and return "
+        "no steps. Do not substitute other columns unless the user asked for that. "
+        "Otherwise set `blocker` to null."
     )
     return [
         {"role": "system", "content": system},

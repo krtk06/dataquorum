@@ -114,7 +114,8 @@ def label_problems(b: BuiltTask) -> list[str]:
         if spec.kind != "matches_expected":
             continue
         for col in spec.params.get("columns", []):
-            if col not in b.messy or b.expected[col].dtype != object:
+            # Text columns: object in pandas 2, `str` dtype in pandas 3.
+            if col not in b.messy or pd.api.types.is_numeric_dtype(b.expected[col]):
                 continue
             spellings: dict[str, Counter[str]] = {}
             for v in b.messy[col]:

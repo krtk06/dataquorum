@@ -94,6 +94,7 @@ known-third-party = ["docker"]
 "tests/test_evals.py" = ["E501"]
 "tests/test_sql.py" = ["E501"]
 "tests/test_loader.py" = ["E501"]
+"tests/test_findings.py" = ["E501"]
 "tests/sandbox/test_docker_executor.py" = ["E501"]
 
 [[tool.mypy.overrides]]

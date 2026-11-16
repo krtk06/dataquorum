@@ -21,6 +21,7 @@ caught: an eval run should stop, not record a failure per task.
 
 from __future__ import annotations
 
+import functools
 import json
 import uuid
 from dataclasses import dataclass
@@ -30,14 +31,15 @@ from typing import Any, Literal, Protocol, TypeVar
 import pandas as pd
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.checkpoint.memory import InMemorySaver
-from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import Command, interrupt
 from pydantic import BaseModel, Field
 
 from dataquorum.core import inputs, prompts
 from dataquorum.core.agent_spec import AgentSpec
+from dataquorum.core.checkpoint import checkpoint_serializer
 from dataquorum.core.cost import Usage
+from dataquorum.core.findings import Findings, findings_messages, grounding_check
 from dataquorum.core.llm import LLMError, Message, ReasoningEffort, StructuredResult
 from dataquorum.core.review import Approve, Reject, Revise, parse_review
 from dataquorum.core.state import AgentResult, DataFrameOutput, FigureOutput
@@ -100,6 +102,7 @@ class EngineState(BaseModel):
     output_path: str | None = None
     checks: list[CheckResult] = []
     attempts: int = 0  # code generations: 1 + fixes
+    findings: list[str] = []  # explain_findings agents (EDA): grounded takeaways
     usage: Usage = Usage()
     result: AgentResult | None = None
 
@@ -212,6 +215,30 @@ class Nodes:
         checks = run_checks(self.spec.checks, before, after, CheckContext(request=s.request))
         return {"checks": checks}
 
+    def explain(self, s: EngineState) -> dict[str, Any]:
+        """Findings grounded in the output table (agents with explain_findings)."""
+        assert s.output_path is not None
+        table = self._load_output(s.output_path)
+        try:
+            out = self.llm.structured(
+                findings_messages(s.request, table), Findings,
+                reasoning_effort=self.spec.reasoning_effort,
+            )  # fmt: skip
+        except LLMError as exc:
+            failed = CheckResult(
+                name="findings_grounded",
+                passed=False,
+                severity=Severity.WARNING,
+                detail=f"no findings: {exc}",
+            )
+            return {"checks": [*s.checks, failed], "usage": s.usage + exc.usage}
+        check = grounding_check(out.value.findings, table)
+        return {
+            "findings": out.value.findings,
+            "checks": [*s.checks, check],
+            "usage": s.usage + out.usage,
+        }
+
     def finalize(self, s: EngineState) -> dict[str, Any]:
         rejected = s.review_kind == "reject"
         output: DataFrameOutput | FigureOutput | None = None
@@ -238,6 +265,7 @@ class Nodes:
             code=s.code,
             steps=s.steps,
             usage=s.usage.model_copy(update={"retries": retries}),
+            message="\n".join(f"- {f}" for f in s.findings) or None,
         )
         return {"result": result}
 
@@ -252,9 +280,11 @@ def after_review(s: EngineState) -> str:
     return {"revise": "recommend", "reject": "finalize"}.get(s.review_kind or "", "generate")
 
 
-def after_validate(s: EngineState) -> str:
+def after_validate(s: EngineState, explain: bool = False) -> str:
     failed = s.error is not None or bool(blocking_failed(s.checks))
-    return "generate" if failed and s.attempts <= s.max_retries else "finalize"
+    if failed and s.attempts <= s.max_retries:
+        return "generate"
+    return "explain" if explain and not failed else "finalize"
 
 
 def build_graph(
@@ -270,6 +300,7 @@ def build_graph(
         "generate",
         "execute",
         "validate",
+        "explain",
         "finalize",
     ):
         g.add_node(name, getattr(n, name))
@@ -279,29 +310,11 @@ def build_graph(
     g.add_conditional_edges("human_review", after_review, ["recommend", "generate", "finalize"])
     g.add_edge("generate", "execute")
     g.add_edge("execute", "validate")
-    g.add_conditional_edges("validate", after_validate, ["generate", "finalize"])
+    route = functools.partial(after_validate, explain=spec.explain_findings)
+    g.add_conditional_edges("validate", route, ["generate", "explain", "finalize"])
+    g.add_edge("explain", "finalize")
     g.add_edge("finalize", END)
     return g
-
-
-# Types stored in checkpoints. LangGraph will refuse unregistered types in a future version.
-_CHECKPOINT_TYPES = [
-    ("dataquorum.core.cost", "Usage"),
-    ("dataquorum.core.statuses", "CheckResult"),
-    ("dataquorum.core.statuses", "Severity"),
-    ("dataquorum.core.statuses", "Status"),
-    ("dataquorum.core.state", "AgentResult"),
-    ("dataquorum.core.state", "DataFrameOutput"),
-    ("dataquorum.core.state", "FigureOutput"),
-    ("dataquorum.core.state", "ModelOutput"),
-    ("dataquorum.core.state", "TextOutput"),
-    ("pathlib", "PosixPath"),
-    ("pathlib", "WindowsPath"),
-]
-
-
-def checkpoint_serializer() -> JsonPlusSerializer:
-    return JsonPlusSerializer(allowed_msgpack_modules=_CHECKPOINT_TYPES)
 
 
 @dataclass(frozen=True)

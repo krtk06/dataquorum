@@ -19,6 +19,7 @@ import pandas as pd
 import plotly.express as px
 
 from dataquorum.evals.checkers import Output, expected_aggregate, run_checker
+from dataquorum.evals.checkers_ml import STATS
 from dataquorum.evals.tasks import BuiltTask, Task, build, load_tasks
 
 
@@ -48,8 +49,10 @@ def oracle_output(b: BuiltTask) -> Output:
     t = b.task
     if t.expect_status == "failed":
         return None
-    if t.agent == "data_cleaning":
+    if t.agent in ("data_cleaning", "data_loader"):
         return b.expected
+    if t.agent == "feature_engineering":
+        return _features(b)
     aggregates = [c.params for c in t.checks if c.kind == "aggregate"]
     if aggregates:
         # Several aggregate checks (e.g. count, median, mean per group) -> one table.
@@ -71,6 +74,16 @@ def oracle_output(b: BuiltTask) -> Output:
         )
         counts: pd.DataFrame = pd.Series(bands).value_counts().rename("n").reset_index()
         return counts
+    if (p := _spec(t, "per_column_stat")) is not None:
+        source = b.messy if isinstance(b.messy, pd.DataFrame) else b.clean
+        stat = STATS[p["stat"]]
+        return pd.DataFrame(
+            {"column": p["columns"], "value": [stat(source[c]) for c in p["columns"]]}
+        )
+    if (p := _spec(t, "correlation")) is not None:
+        source = b.messy if isinstance(b.messy, pd.DataFrame) else b.clean
+        r = source[p["x"]].corr(source[p["y"]], method=p.get("method", "pearson"))
+        return pd.DataFrame({"x": [p["x"]], "y": [p["y"]], "corr": [r]})
     if (p := _spec(t, "filter_rows")) is not None:
         return b.clean.query(p["query"], engine="python")
     if (p := _spec(t, "derived_column")) is not None:
@@ -93,6 +106,33 @@ def oracle_output(b: BuiltTask) -> Output:
     return dict(px.scatter(b.clean, x=first, y=second).to_plotly_json())
 
 
+def _features(b: BuiltTask) -> pd.DataFrame:
+    """Reference feature table built from the task's own checks."""
+    assert isinstance(b.messy, pd.DataFrame)
+    src, t = b.messy, b.task
+    target = (_spec(t, "column_unchanged") or {}).get("column")
+    scaled = {c: "standardized" for c in (_spec(t, "standardized") or {}).get("columns", [])}
+    scaled |= {c: "minmax" for c in (_spec(t, "minmax") or {}).get("columns", [])}
+    encoded = [c.params["column"] for c in t.checks if c.kind == "onehot"]
+    parts: list[pd.Series | pd.DataFrame] = []
+    for col in src.columns:
+        if col == target or col in encoded:
+            continue
+        if pd.api.types.is_numeric_dtype(src[col]):
+            v = src[col].astype(float).fillna(src[col].median())
+            if scaled.get(col) == "standardized":
+                v = (v - v.mean()) / v.std(ddof=0)
+            elif scaled.get(col) == "minmax":
+                v = (v - v.min()) / (v.max() - v.min())
+            parts.append(v.rename(col))
+    for col in encoded:
+        parts.append(pd.get_dummies(src[col].astype(str), prefix=col, dtype=float))
+    out = pd.concat(parts, axis=1) if parts else pd.DataFrame(index=src.index)
+    if target:
+        out[target] = src[target]
+    return out
+
+
 def _as_json(output: Output) -> Output:
     """Round-trip figures through JSON like real runs do (typed arrays, no numpy objects)."""
     if isinstance(output, dict):
@@ -109,7 +149,9 @@ def label_problems(b: BuiltTask) -> list[str]:
     each expected label has to be the strict-majority spelling among its case/space variants
     in the messy input. (Week 8: a rare label that only appeared as a variant made a correct
     agent look like a false success.)"""
-    problems = []
+    problems: list[str] = []
+    if not isinstance(b.messy, pd.DataFrame):
+        return problems
     for spec in b.task.checks:
         if spec.kind != "matches_expected":
             continue
@@ -141,7 +183,9 @@ def check_task(b: BuiltTask) -> list[str]:
         if not outcome.passed:
             problems.append(f"oracle fails {outcome.name}: {outcome.detail}")
     if b.task.expect_status == "ok":
-        naive = b.messy if b.task.agent != "data_visualization" else None
+        naive: Output = None  # folders, databases and charts have no "unchanged input" answer
+        if isinstance(b.messy, pd.DataFrame) and b.task.agent != "data_visualization":
+            naive = b.messy
         if all(run_checker(s.kind, b, naive, s.params).passed for s in b.task.checks):
             problems.append("returning the input unchanged passes every check (task is trivial)")
     return problems

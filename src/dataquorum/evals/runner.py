@@ -42,6 +42,7 @@ from dataquorum.evals.scoring import TaskResult, classify, format_summary, summa
 from dataquorum.evals.tasks import Task, build, load_tasks
 from dataquorum.sandbox.docker_executor import DockerExecutor, SandboxUnavailableError
 from dataquorum.sandbox.executor import Executor
+from dataquorum.sandbox.sql_executor import SqlExecutor
 from dataquorum.tracing.recorder import DuckDBLedger, RunRecorder, git_commit
 
 
@@ -65,8 +66,10 @@ def run_task(
     task: Task, llm: StructuredLLM, executor: Executor, runs_dir: Path, eval_id: str,
     options: RunOptions, repeat: int = 0,
 ) -> tuple[TaskResult, AgentResult]:  # fmt: skip
-    built = build(task)
+    built = build(task, workdir=runs_dir / f"{task.id}-input-r{repeat}")
     spec = AGENTS[task.agent]
+    if spec.language == "sql":
+        executor = SqlExecutor()
     if options.no_checks:
         spec = dataclasses.replace(spec, generic_checks=(), extra_checks=())
     engine = Engine(spec, llm, executor, runs_dir=runs_dir, max_retries=options.max_retries,

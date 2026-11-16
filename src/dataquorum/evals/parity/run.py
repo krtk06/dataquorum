@@ -59,6 +59,7 @@ def run_one(
     max_retries: int, timeout: int,
 ) -> TaskResult:  # fmt: skip
     built = build(task)
+    assert isinstance(built.messy, pd.DataFrame)
     job = workdir / task.id
     shutil.rmtree(job, ignore_errors=True)
     (job / "out").mkdir(parents=True)
@@ -122,7 +123,10 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--label", default="original")
     args = p.parse_args(argv)
 
-    tasks = [t for t in load_tasks() if not args.only or any(s in t.id for s in args.only)]
+    # The original's agents take a DataFrame; folder/database tasks have no counterpart here.
+    comparable = {"data_cleaning", "data_wrangling", "data_visualization"}
+    tasks = [t for t in load_tasks() if t.agent in comparable and not t.files and not t.database]
+    tasks = [t for t in tasks if not args.only or any(s in t.id for s in args.only)]
     tasks = tasks[: args.limit]
     config = LLMConfig.from_env().model_copy(update={"fallback_model": None})
     try:

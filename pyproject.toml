@@ -59,6 +59,7 @@ markers = ["docker: needs Docker and the dataquorum/sandbox image (skipped other
 [dependency-groups]
 dev = [
     "mypy>=2.4.1",
+    "openpyxl>=3.1.5",
     "pandas-stubs>=2.2,<3",
     "pytest>=9.2.0",
     "ruff>=0.17.5",
@@ -98,6 +99,7 @@ known-third-party = ["docker"]
 "tests/test_findings.py" = ["E501"]
 "tests/test_features.py" = ["E501"]
 "src/dataquorum/agents/features.py" = ["E501"]
+"src/dataquorum/evals/checkers_ml.py" = ["E501"]
 "tests/sandbox/test_docker_executor.py" = ["E501"]
 
 [[tool.mypy.overrides]]

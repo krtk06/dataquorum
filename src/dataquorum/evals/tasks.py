@@ -17,6 +17,7 @@ Requests may use `{name}` placeholders filled from fault facts (e.g. `{fnlwgt_th
 
 from __future__ import annotations
 
+import tempfile
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from pathlib import Path
@@ -28,6 +29,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from dataquorum.evals import datasets
 from dataquorum.evals.faults import FaultSpec, apply_faults
+from dataquorum.evals.inputs import DatabaseSpec, FileSpec, write_database, write_files
 
 TASKS_DIR = Path(__file__).parent / "tasks"
 ExpectStatus = Literal["ok", "failed"]  # ok = success or needs_review
@@ -54,6 +56,8 @@ class Task(BaseModel):
     faults: list[FaultSpec] = []
     expect_status: ExpectStatus = "ok"
     tags: list[str] = []
+    files: list[FileSpec] = []  # loader tasks: the input is a folder of these files
+    database: DatabaseSpec | None = None  # SQL tasks: the input is a SQLite file
 
 
 class _TaskFile(BaseModel):
@@ -82,12 +86,16 @@ def load_tasks(paths: Iterable[Path] | None = None) -> list[Task]:
 class BuiltTask:
     task: Task
     clean: pd.DataFrame  # sampled, before faults
-    messy: pd.DataFrame  # what the agent gets
+    messy: pd.DataFrame | Path  # what the agent gets: a frame, a folder or a database
     expected: pd.DataFrame  # what a correct cleaning would return
     request: str  # with fault facts filled in
 
 
-def build(task: Task, loader: Callable[[str], pd.DataFrame] | None = None) -> BuiltTask:
+def build(
+    task: Task,
+    loader: Callable[[str], pd.DataFrame] | None = None,
+    workdir: Path | None = None,
+) -> BuiltTask:
     frame = (loader or datasets.load)(task.dataset)  # looked up at call time (tests patch it)
     if task.columns:
         missing = [c for c in task.columns if c not in frame.columns]
@@ -99,4 +107,14 @@ def build(task: Task, loader: Callable[[str], pd.DataFrame] | None = None) -> Bu
     clean = frame.sample(n=n, random_state=task.seed).reset_index(drop=True)
     faulted = apply_faults(clean, task.faults, task.seed)
     request = task.request.format(**faulted.facts) if faulted.facts else task.request
+    if task.files or task.database:
+        root = workdir or Path(tempfile.mkdtemp(prefix=f"dq-{task.id}-"))
+        if task.files:
+            folder = root / "input"
+            expected = write_files(task.files, faulted.messy, folder)
+            return BuiltTask(task, clean, folder, expected, request)
+        assert task.database is not None
+        db = root / "input.db"
+        write_database(task.database, faulted.messy, db)
+        return BuiltTask(task, clean, db, faulted.expected, request)
     return BuiltTask(task, clean, faulted.messy, faulted.expected, request)

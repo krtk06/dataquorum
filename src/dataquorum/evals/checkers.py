@@ -380,9 +380,12 @@ CHECKERS: dict[str, Callable[..., CheckOutcome]] = {
 def run_checker(
     kind: str, built: BuiltTask, output: Output, params: dict[str, Any]
 ) -> CheckOutcome:
-    if kind not in CHECKERS:
+    from dataquorum.evals.checkers_ml import ML_CHECKERS  # lazy: it imports this module
+
+    registry = {**CHECKERS, **ML_CHECKERS}
+    if kind not in registry:
         return CheckOutcome(kind, False, f"unknown checker {kind!r}")
     try:
-        return CHECKERS[kind](built, output, **params)
+        return registry[kind](built, output, **params)
     except Exception as exc:  # a broken checker must not pass
         return CheckOutcome(kind, False, f"checker raised {type(exc).__name__}: {exc}")

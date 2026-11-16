@@ -14,7 +14,8 @@ from engine_fakes import InProcessExecutor, ScriptedLLM
 from dataquorum.agents import AGENTS
 from dataquorum.core.engine import GeneratedCode, RecommendedSteps
 from dataquorum.evals import datasets
-from dataquorum.evals.checkers import CHECKERS, CheckOutcome, run_checker
+from dataquorum.evals.checkers import CheckOutcome, run_checker
+from dataquorum.evals.checkers_ml import all_checkers
 from dataquorum.evals.faults import FAULTS, FaultSpec, apply_faults
 from dataquorum.evals.oracle import check_task
 from dataquorum.evals.runner import RunOptions, run_eval
@@ -91,6 +92,7 @@ def test_matches_expected_reports_first_wrong_value() -> None:
     wrong = b.expected.assign(amount=b.expected["amount"] + 1)
     bad = run_checker("matches_expected", b, wrong, {"columns": ["amount"]})
     assert not bad.passed and "40 wrong" in bad.detail
+    assert isinstance(b.messy, pd.DataFrame)
     text = run_checker("matches_expected", b, b.messy, {"columns": ["amount"]})
     assert not text.passed and "not numeric" in text.detail
 
@@ -149,7 +151,7 @@ def test_task_files_are_consistent() -> None:
         assert t.agent in AGENTS, t.id
         assert t.dataset in datasets.DATASETS, t.id
         assert all(f.kind in FAULTS for f in t.faults), t.id
-        assert all(c.kind in CHECKERS for c in t.checks), t.id
+        assert all(c.kind in all_checkers() for c in t.checks), t.id
     assert sum(t.expect_status == "failed" for t in all_tasks) >= 3
 
 
@@ -261,3 +263,45 @@ def test_oracle_flags_a_label_that_only_appears_as_a_variant() -> None:
     problems = label_problems(BuiltTask(t, clean, messy, clean, "r"))
     assert problems and "Rare_Place" in problems[0]
     assert label_problems(BuiltTask(t, clean, clean, clean, "r")) == []
+
+
+def test_write_files_builds_parts_decoys_and_expected(tmp_path: Path) -> None:
+    from dataquorum.evals.inputs import FileSpec, write_files
+
+    specs = [
+        FileSpec(path="b/2.csv", rows=(20, 40), sep=";", preamble=["note"]),
+        FileSpec(path="b/1.csv", rows=(0, 20)),
+        FileSpec(path="old.csv", decoy=True),
+        FileSpec(path="README.txt", format="text", text="hello"),
+    ]
+    expected = write_files(specs, CLEAN, tmp_path)
+    assert expected["id"].tolist() == list(range(40))  # file-name order: b/1 then b/2
+    assert (tmp_path / "b" / "2.csv").read_text(encoding="utf-8").startswith("note\nregion;")
+    assert (tmp_path / "README.txt").read_text(encoding="utf-8") == "hello"
+    decoy = pd.read_csv(tmp_path / "old.csv")
+    assert decoy["amount"].min() > 1000
+
+
+def test_write_database_with_lookup_needs_a_join(tmp_path: Path) -> None:
+    import sqlite3
+
+    from dataquorum.evals.inputs import DatabaseSpec, LookupSpec, write_database
+
+    db = tmp_path / "x.db"
+    write_database(
+        DatabaseSpec(table="sales", lookups=[LookupSpec(column="region", table="regions")]),
+        CLEAN,
+        db,
+    )
+    con = sqlite3.connect(db)
+    try:
+        columns = [r[1] for r in con.execute("PRAGMA table_info(sales)")]
+        joined = con.execute(
+            "SELECT r.name, SUM(s.amount) FROM sales s JOIN regions r ON r.id = s.region_id GROUP BY r.name ORDER BY r.name"
+        ).fetchall()
+    finally:
+        con.close()
+    assert "region" not in columns and "region_id" in columns
+    want = CLEAN.groupby("region")["amount"].sum().sort_index()
+    assert [name for name, _ in joined] == list(want.index)
+    assert np.allclose([total for _, total in joined], want.to_numpy())

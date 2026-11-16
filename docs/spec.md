@@ -266,3 +266,10 @@ Implemented (week 6), all in `src/dataquorum/evals/`:
   false_success; **false-success rate** is the headline metric.
 - `runner.py`: parallel runs, one model and effort per run (no fallback), budget guard in
   eval mode stops the run, results in `runs/evals/<id>/` and DuckDB (`eval_task_id`).
+  Flags `--no-checks`, `--no-recommend`, `--max-retries`, `--repeats` (week 7).
+- `stats.py`, `compare.py` (week 7); `parity/run.py` + `images/original/` (week 7).
+- Week 8: 16 hard tasks (`hard.yaml`, 71 total). **Answer keys must be inferable**: faults
+  that vary labels keep the original spelling a strict majority, and the oracle's
+  `label_problems` rejects any task whose expected label is not the majority spelling in its
+  input. (A rare label that appeared only as a variant once made a correct agent look like a
+  false success.)

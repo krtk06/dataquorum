@@ -62,7 +62,8 @@ class Usage(BaseModel):
     allowance_usd: float = 0.0
     calls: int = 0
     retries: int = 0
-    seconds: float = 0.0
+    seconds: float = 0.0  # LLM wall time
+    execution_seconds: float = 0.0  # sandbox wall time (set by the engine)
 
     def __add__(self, other: Usage) -> Usage:
         return Usage(
@@ -76,6 +77,7 @@ class Usage(BaseModel):
             calls=self.calls + other.calls,
             retries=self.retries + other.retries,
             seconds=self.seconds + other.seconds,
+            execution_seconds=self.execution_seconds + other.execution_seconds,
         )
 
 

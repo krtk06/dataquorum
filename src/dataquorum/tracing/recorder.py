@@ -43,7 +43,7 @@ CREATE TABLE IF NOT EXISTS runs (
     cached_tokens BIGINT,
     list_cost_usd DOUBLE,
     allowance_usd DOUBLE,
-    seconds DOUBLE,
+    seconds DOUBLE,  -- LLM time
     failed_checks VARCHAR[],
     checks JSON,
     error VARCHAR,
@@ -52,12 +52,21 @@ CREATE TABLE IF NOT EXISTS runs (
     git_commit VARCHAR,
     eval_task_id VARCHAR
 );
+ALTER TABLE runs ADD COLUMN IF NOT EXISTS execution_seconds DOUBLE;
 CREATE TABLE IF NOT EXISTS llm_spend (
     spent_at TIMESTAMPTZ,
     model VARCHAR,
     allowance_usd DOUBLE
 );
 """
+
+
+_COLUMNS = [
+    "run_id", "parent_run_id", "created_at", "agent", "status", "output_kind", "output_ref",
+    "models", "calls", "retries", "prompt_tokens", "completion_tokens", "reasoning_tokens",
+    "cached_tokens", "list_cost_usd", "allowance_usd", "seconds", "failed_checks", "checks",
+    "error", "message", "code", "git_commit", "eval_task_id", "execution_seconds",
+]  # fmt: skip
 
 
 @cache
@@ -103,9 +112,13 @@ class RunRecorder:
             u.allowance_usd, u.seconds, failed, checks, result.error, result.message,
             result.code, git_commit(), eval_task_id,
         ]  # fmt: skip
+        row.append(u.execution_seconds)
         placeholders = ", ".join("?" * len(row))
+        columns = ", ".join(_COLUMNS)
         with self.lock:
-            self.con.execute(f"INSERT OR REPLACE INTO runs VALUES ({placeholders})", row)
+            self.con.execute(
+                f"INSERT OR REPLACE INTO runs ({columns}) VALUES ({placeholders})", row
+            )
 
     def runs(self, where: str = "TRUE") -> pd.DataFrame:
         """Recorded runs as a DataFrame, newest first. `where` is trusted SQL (dev use)."""

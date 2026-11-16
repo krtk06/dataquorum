@@ -83,7 +83,8 @@ def run_task(
         status=str(result.status), outcome=classify(str(result.status), task.expect_status, checks),
         checks=checks, error=result.error, run_id=result.run_id, calls=u.calls, retries=u.retries,
         completion_tokens=u.completion_tokens, reasoning_tokens=u.reasoning_tokens,
-        allowance_usd=u.allowance_usd, seconds=round(u.seconds, 2), repeat=repeat,
+        allowance_usd=u.allowance_usd, seconds=round(u.seconds + u.execution_seconds, 2),
+        llm_seconds=round(u.seconds, 2), execution_seconds=round(u.execution_seconds, 2), repeat=repeat,
     )  # fmt: skip
     return scored, result
 

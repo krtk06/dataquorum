@@ -17,6 +17,8 @@ Fault kinds (column-level unless noted):
                     sample without them
 - parse_numeric_text  no damage; source text numbers (blanks) -> expected floats / NaN
 - zero_means_missing  no damage; source zeros that mean "unknown" -> expected NaN
+- mixed_numeric_text  "$1,234.00", "1.234k", "1234" and placeholders in one column
+- near_duplicates   (row-level) copies whose text differs only in case or spacing
 """
 
 from __future__ import annotations
@@ -142,11 +144,23 @@ def category_variants(f: Faulted, spec: FaultSpec, rng: np.random.Generator) -> 
         lambda s: f"{s}  ",
     ]
     messy = f.messy[col].astype(object)
+    budget = _variant_budget(messy)
     for row in rows:
         value = messy.iloc[row]
         if isinstance(value, str):
-            messy.iloc[row] = styles[int(rng.integers(len(styles)))](value)
+            style = styles[int(rng.integers(len(styles)))]  # drawn even when skipped
+            if budget.get(value, 0) > 0:
+                budget[value] -= 1
+                messy.iloc[row] = style(value)
     f.messy[col] = messy
+
+
+def _variant_budget(column: pd.Series) -> dict[str, int]:
+    """How many rows of each label may get a variant spelling while the original spelling
+    stays a strict majority. Without this, a label seen once could appear only as a variant,
+    and "use the spelling most rows use" would have no single right answer (week-8 finding)."""
+    counts = column[column.map(lambda v: isinstance(v, str))].value_counts()
+    return {str(label): (int(n) - 1) // 2 for label, n in counts.items()}
 
 
 def outliers(f: Faulted, spec: FaultSpec, rng: np.random.Generator) -> None:
@@ -166,6 +180,61 @@ def duplicates(f: Faulted, spec: FaultSpec, rng: np.random.Generator) -> None:
     rows = set(_pick(len(f.messy), spec.frac, rng).tolist())
     order = [i for i in range(len(f.messy)) for _ in range(2 if i in rows else 1)]
     f.messy = f.messy.iloc[order].reset_index(drop=True)
+
+
+def mixed_numeric_text(f: Faulted, spec: FaultSpec, rng: np.random.Generator) -> None:
+    """One column mixing "$1,234.00", "1.234k", plain "1234" and placeholders. Expected:
+    the number each string states; NaN for placeholders."""
+    col = _require(spec)
+    values = _numeric(f.messy[col])
+    blanks = set(_pick(len(values), spec.frac, rng).tolist())
+    tokens = ["n/a", "N/A", "", "-"]
+    text: list[str | None] = []
+    for i, v in enumerate(values):
+        if i in blanks:
+            text.append(tokens[int(rng.integers(len(tokens)))])
+        elif pd.isna(v):
+            text.append(None)
+        else:
+            style = int(rng.integers(3))
+            text.append(
+                f"${v:,.2f}" if style == 0 else f"{v / 1000:g}k" if style == 1 else f"{v:g}"
+            )
+    f.messy[col] = pd.Series(text, dtype=object)
+    f.expected[col] = pd.Series([_parse_any(t) for t in text], dtype=float)
+
+
+def _parse_any(s: str | None) -> float:
+    if s is None or s.strip().lower() in {"", "n/a", "-"}:
+        return np.nan
+    s = s.strip().replace("$", "").replace(",", "")
+    return float(s[:-1]) * 1000 if s.endswith("k") else float(s)
+
+
+def near_duplicates(f: Faulted, spec: FaultSpec, rng: np.random.Generator) -> None:
+    """(row-level) copies inserted after originals with text in a different case or with
+    extra spaces. Expected: the sample without them (text in its original spelling)."""
+    rows = set(_pick(len(f.messy), spec.frac, rng).tolist())
+    styles: list[Callable[[str], str]] = [str.upper, str.lower, lambda s: f" {s} "]
+    text_cols = [c for c in f.messy.columns if f.messy[c].map(lambda v: isinstance(v, str)).any()]
+    budgets = {c: _variant_budget(f.messy[c]) for c in text_cols}
+    parts = []
+    for i in range(len(f.messy)):
+        parts.append(f.messy.iloc[[i]])
+        if i in rows:
+            copy = f.messy.iloc[[i]].copy()
+            chosen = {}
+            for col in copy.columns:
+                value = copy.iloc[0][col]
+                if isinstance(value, str):
+                    chosen[col] = styles[int(rng.integers(3))]  # drawn even when skipped
+            # Copy only if every text label in the row keeps its original spelling a majority.
+            if all(budgets[c].get(copy.iloc[0][c], 0) > 0 for c in chosen):
+                for col, style in chosen.items():
+                    budgets[col][copy.iloc[0][col]] -= 1
+                    copy.at[copy.index[0], col] = style(copy.iloc[0][col])
+                parts.append(copy)
+    f.messy = pd.concat(parts, ignore_index=True)
 
 
 def parse_numeric_text(f: Faulted, spec: FaultSpec, rng: np.random.Generator) -> None:
@@ -198,6 +267,8 @@ FAULTS: dict[str, Callable[[Faulted, FaultSpec, np.random.Generator], None]] = {
     "duplicates": duplicates,
     "parse_numeric_text": parse_numeric_text,
     "zero_means_missing": zero_means_missing,
+    "mixed_numeric_text": mixed_numeric_text,
+    "near_duplicates": near_duplicates,
 }
 
 
@@ -205,7 +276,8 @@ def apply_faults(clean: pd.DataFrame, faults: list[FaultSpec], seed: int) -> Fau
     """Apply faults in order. Duplicates are applied last so row-level faults line up."""
     result = Faulted(messy=clean.copy().reset_index(drop=True), expected=clean.copy())
     result.expected = result.expected.reset_index(drop=True)
-    ordered = sorted(enumerate(faults), key=lambda p: p[1].kind == "duplicates")
+    row_level = {"duplicates", "near_duplicates"}
+    ordered = sorted(enumerate(faults), key=lambda p: p[1].kind in row_level)
     for index, spec in ordered:
         if spec.kind not in FAULTS:
             raise ValueError(f"unknown fault kind {spec.kind!r}; known: {sorted(FAULTS)}")

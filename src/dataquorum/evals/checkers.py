@@ -11,9 +11,10 @@ the right number for every group.
 from __future__ import annotations
 
 import base64
+import math
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 import pandas as pd
@@ -108,27 +109,51 @@ def no_missing(b: BuiltTask, output: Output, columns: list[str]) -> CheckOutcome
 
 
 # ------------------------------------------------------------------ wrangling
-def _expected_aggregate(
-    b: BuiltTask, group_by: list[str], value: str, agg: str, query: str | None
-) -> pd.Series:
+def group_key(v: Any) -> str:
+    """Group label as text, so 2006, 2006.0 and "2006 " all compare equal."""
+    if isinstance(v, str):
+        return v.strip()
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return str(v)
+    if math.isnan(f):
+        return "nan"
+    return str(int(f)) if f.is_integer() else repr(f)
+
+
+def expected_aggregate(
+    b: BuiltTask, group_by: list[str], value: str, agg: str = "sum", query: str | None = None,
+    value_expr: str | None = None, min_count: int | None = None, top: int | None = None,
+    top_per: str | None = None,
+) -> pd.Series:  # fmt: skip
+    """The reference aggregate. Also used by the oracle, so both read tasks the same way."""
     source = b.clean.query(query, engine="python") if query else b.clean
+    if value_expr:
+        source = source.copy()
+        source[value] = source.eval(value_expr)
     grouped = source.groupby(group_by, dropna=False)[value]
-    return grouped.size() if agg == "count" else grouped.agg(agg)
+    result: pd.Series = grouped.size() if agg == "count" else grouped.agg(agg)
+    if min_count:
+        result = result[grouped.size() >= min_count]
+    if top is not None:
+        ranked = result.sort_values(ascending=False)
+        result = (
+            ranked.groupby(level=top_per, group_keys=False).head(top)
+            if top_per
+            else ranked.head(top)
+        )
+    return result
 
 
 def aggregate(
-    b: BuiltTask,
-    output: Output,
-    group_by: list[str] | str,
-    value: str,
-    agg: str = "sum",
-    query: str | None = None,
-    order: str | None = None,
-    top: int | None = None,
+    b: BuiltTask, output: Output, group_by: list[str] | str, value: str, agg: str = "sum",
+    query: str | None = None, order: str | None = None, top: int | None = None,
+    top_per: str | None = None, value_expr: str | None = None, min_count: int | None = None,
     atol: float = 0.01,
-) -> CheckOutcome:
+) -> CheckOutcome:  # fmt: skip
     keys = [group_by] if isinstance(group_by, str) else group_by
-    name = f"aggregate({agg} {value} by {keys})"
+    name = f"aggregate({agg} {value_expr or value} by {keys})"
     out = _frame(output, name)
     if isinstance(out, CheckOutcome):
         return out
@@ -137,12 +162,10 @@ def aggregate(
     missing = [k for k in keys if k not in out.columns]
     if missing:
         return CheckOutcome(name, False, f"group columns missing: {missing}")
-    expected = _expected_aggregate(b, keys, value, agg, query)
-    if top is not None:
-        expected = expected.sort_values(ascending=False).head(top)
+    expected = expected_aggregate(b, keys, value, agg, query, value_expr, min_count, top, top_per)
     exp_frame = expected.rename("__expected__").reset_index()
     for k in keys:
-        exp_frame[k], out[k] = exp_frame[k].astype(str), out[k].astype(str)
+        exp_frame[k], out[k] = exp_frame[k].map(group_key), out[k].map(group_key)
     if len(out) != len(exp_frame) or set(out[keys].itertuples(index=False)) != set(
         exp_frame[keys].itertuples(index=False)
     ):
@@ -152,7 +175,7 @@ def aggregate(
     merged = out.merge(exp_frame, on=keys, how="left")
     for col in [c for c in out.columns if c not in keys and pd.api.types.is_numeric_dtype(out[c])]:
         if all(_same(x, y, atol) for x, y in zip(merged[col], merged["__expected__"], strict=True)):
-            if order:
+            if order and not top_per:
                 values = out[col].to_numpy()
                 ok = bool(
                     np.all(np.diff(values) <= 0)
@@ -163,6 +186,66 @@ def aggregate(
                     return CheckOutcome(name, False, f"values right but not sorted {order} ({col})")
             return CheckOutcome(name, True, f"column {col!r} matches")
     return CheckOutcome(name, False, "no numeric column matches the expected values")
+
+
+def pivot(
+    b: BuiltTask, output: Output, index: str, columns: str, value: str, agg: str = "mean",
+    atol: float = 0.01,
+) -> CheckOutcome:  # fmt: skip
+    name = f"pivot({agg} {value}: {index} x {columns})"
+    out = _frame(output, name)
+    if isinstance(out, CheckOutcome):
+        return out
+    out = out.reset_index() if index not in out.columns else out.copy()
+    if index not in out.columns:
+        return CheckOutcome(name, False, f"index column {index!r} missing")
+    expected = b.clean.pivot_table(
+        index=index, columns=columns, values=value, aggfunc=cast(Any, agg)
+    )
+    by_label = {group_key(c): c for c in out.columns}
+    wanted = [group_key(c) for c in expected.columns]
+    absent = [c for c in wanted if c not in by_label]
+    if absent:
+        return CheckOutcome(name, False, f"missing columns for {columns} values {absent}")
+    out = out.set_index(out[index].map(group_key))
+    exp_index = [group_key(i) for i in expected.index]
+    if sorted(out.index) != sorted(exp_index):
+        return CheckOutcome(name, False, f"rows {sorted(out.index)[:6]} != {sorted(exp_index)[:6]}")
+    wrong = [
+        (r, c)
+        for r, row in zip(exp_index, expected.itertuples(index=False), strict=True)
+        for c, want in zip(wanted, row, strict=True)
+        if not _same(out.loc[r, by_label[c]], want, atol)
+    ]
+    detail = f"{len(wrong)} wrong cells, e.g. {wrong[:3]}" if wrong else "all cells match"
+    return CheckOutcome(name, not wrong, detail)
+
+
+def binned_count(
+    b: BuiltTask, output: Output, column: str, bins: list[float], labels: list[str],
+    right: bool = False,
+) -> CheckOutcome:  # fmt: skip
+    name = f"binned_count({column})"
+    out = _frame(output, name)
+    if isinstance(out, CheckOutcome):
+        return out
+    out = out.reset_index()
+    counts = pd.cut(b.clean[column], bins=bins, labels=labels, right=right).value_counts()
+    want = {group_key(k): int(v) for k, v in counts.items()}
+    needed = {k for k, v in want.items() if v > 0}
+    for label_col in out.columns:
+        labels_out = [group_key(v) for v in out[label_col]]
+        if needed <= set(labels_out) <= set(want):
+            numeric = [
+                c for c in out.columns if c != label_col and pd.api.types.is_numeric_dtype(out[c])
+            ]
+            for col in numeric:
+                if all(
+                    _same(n, want[lab], 0.0) for lab, n in zip(labels_out, out[col], strict=True)
+                ):
+                    return CheckOutcome(name, True, f"bands in {label_col!r}, counts in {col!r}")
+            return CheckOutcome(name, False, f"bands found in {label_col!r} but counts wrong")
+    return CheckOutcome(name, False, f"no column holds the bands {sorted(needed)}")
 
 
 def filter_rows(b: BuiltTask, output: Output, query: str, key: str) -> CheckOutcome:
@@ -220,28 +303,46 @@ def figure_type(b: BuiltTask, output: Output, types: list[str]) -> CheckOutcome:
 
 def figure_aggregate(
     b: BuiltTask, output: Output, group_by: str, value: str, agg: str = "sum",
-    query: str | None = None, atol: float = 0.01,
+    query: str | None = None, color: str | None = None, order: str | None = None,
+    atol: float = 0.01,
 ) -> CheckOutcome:  # fmt: skip
-    name = f"figure_aggregate({agg} {value} by {group_by})"
+    """Bars (or line points) must show the aggregate. With `color`, one trace per colour
+    value (Plotly puts it in the trace name). With `order`, bar heights must be sorted."""
+    name = f"figure_aggregate({agg} {value} by {group_by}" + (f" and {color})" if color else ")")
     fig = _figure(output, name)
     if isinstance(fig, CheckOutcome):
         return fig
-    expected = _expected_aggregate(b, [group_by], value, agg, query)
-    want = {str(k): v for k, v in expected.items()}
-    got: dict[str, Any] = {}
+    keys = [group_by, color] if color else [group_by]
+    expected = expected_aggregate(b, keys, value, agg, query)
+    want = {
+        tuple(group_key(x) for x in (k if isinstance(k, tuple) else (k,))): v
+        for k, v in expected.items()
+    }
+    got: dict[tuple[str, ...], Any] = {}
+    first_heights: list[Any] = []
     for trace in fig["data"]:
         cats, nums = plotly_values(trace.get("x")), plotly_values(trace.get("y"))
         if trace.get("orientation") == "h":
             cats, nums = nums, cats
         if trace.get("type") == "histogram" and not nums:  # px.histogram counts raw values
-            counts = pd.Series(cats).astype(str).value_counts()
-            got.update({str(k): int(v) for k, v in counts.items()})
-            continue
-        got.update({str(c): v for c, v in zip(cats, nums, strict=False)})
+            counted = pd.Series(cats).map(group_key).value_counts()
+            cats, nums = list(counted.index), [int(v) for v in counted]
+        suffix = (group_key(trace.get("name", "")),) if color else ()
+        got.update({(group_key(c), *suffix): v for c, v in zip(cats, nums, strict=False)})
+        first_heights = first_heights or list(nums)
     if set(got) != set(want):
-        return CheckOutcome(name, False, f"categories {sorted(got)[:8]} != {sorted(want)[:8]}")
+        return CheckOutcome(name, False, f"categories {sorted(got)[:6]} != {sorted(want)[:6]}")
     wrong = [k for k in want if not _same(got[k], want[k], atol)]
-    return CheckOutcome(name, not wrong, f"wrong values for {wrong}" if wrong else "all bars match")
+    if wrong:
+        return CheckOutcome(name, False, f"wrong values for {wrong[:5]}")
+    if order:
+        heights = np.asarray(first_heights, dtype=float)
+        ok = bool(
+            np.all(np.diff(heights) <= 0) if order == "desc" else np.all(np.diff(heights) >= 0)
+        )
+        if not ok:
+            return CheckOutcome(name, False, f"values right but bars not sorted {order}")
+    return CheckOutcome(name, True, "all bars match")
 
 
 def figure_point_count(b: BuiltTask, output: Output, n: int | None = None) -> CheckOutcome:
@@ -265,6 +366,8 @@ CHECKERS: dict[str, Callable[..., CheckOutcome]] = {
     "columns_kept": columns_kept,
     "no_missing": no_missing,
     "aggregate": aggregate,
+    "pivot": pivot,
+    "binned_count": binned_count,
     "filter_rows": filter_rows,
     "derived_column": derived_column,
     "figure_type": figure_type,

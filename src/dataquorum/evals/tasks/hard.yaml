@@ -1,0 +1,205 @@
+# Harder tasks (week 8): several faults per table, mixed formats in one column, near-duplicate
+# rows, pivots, top-N per group, rates, bands, grouped/sorted charts, and tempting proxies for
+# impossible requests. Written because the week-6 suite scored 100% (no signal).
+defaults:
+  tags: [hard]
+
+tasks:
+  # ---------------------------------------------------------------- cleaning
+  - id: hard-clean-adult-capital-gain-mixed
+    agent: data_cleaning
+    dataset: adult
+    columns: [age, education, capital-gain, hours-per-week]
+    faults: [{kind: mixed_numeric_text, column: capital-gain, frac: 0.1}]
+    request: >-
+      capital-gain mixes formats: dollar text like "$1,234.00", thousands like "1.234k", plain
+      numbers like "500", and "n/a", "N/A", "-" or empty strings for unknown values. Convert it
+      to float dollars with unknown values as missing (NaN). Do not fill missing values. Keep
+      every row and column in the same order.
+    checks:
+      - {kind: matches_expected, columns: [capital-gain, age]}
+
+  - id: hard-clean-ames-four-faults
+    agent: data_cleaning
+    dataset: ames-housing
+    columns: [Neighborhood, Lot_Area, Gr_Liv_Area, Sale_Price]
+    seed: 31
+    faults:
+      - {kind: currency_text, column: Sale_Price}
+      - {kind: thousands_suffix, column: Lot_Area}
+      - {kind: category_variants, column: Neighborhood, frac: 0.2}
+      - {kind: duplicates, frac: 0.05}
+    request: >-
+      Clean this table: (1) remove exact duplicate rows, keeping the first occurrence and the
+      original order; (2) Sale_Price is dollar text like "$215,000.00": convert to float;
+      (3) Lot_Area is text where "11.622k" means 11622: convert to float; (4) fix Neighborhood
+      labels with the wrong case or extra spaces to the spelling used by most rows.
+    checks:
+      - {kind: row_count}
+      - {kind: matches_expected, columns: [Sale_Price, Lot_Area, Neighborhood, Gr_Liv_Area]}
+
+  - id: hard-clean-credit-near-duplicates
+    agent: data_cleaning
+    dataset: credit-g
+    columns: [purpose, housing, credit_amount, duration]
+    faults: [{kind: near_duplicates, frac: 0.1}]
+    request: >-
+      Some rows are duplicates that differ only in letter case or extra spaces in the text
+      columns. First rewrite every text label to the spelling used by most rows, then remove
+      the duplicate rows, keeping the first occurrence and the original order.
+    checks:
+      - {kind: row_count}
+      - {kind: matches_expected, columns: [purpose, housing, credit_amount, duration]}
+
+  - id: hard-clean-telco-three-faults
+    agent: data_cleaning
+    dataset: telco-customer-churn
+    columns: [Contract, tenure, MonthlyCharges, TotalCharges]
+    rows: 1500
+    faults:
+      - {kind: parse_numeric_text, column: TotalCharges}
+      - {kind: currency_text, column: MonthlyCharges}
+      - {kind: category_variants, column: Contract, frac: 0.2}
+    request: >-
+      Clean this table: (1) TotalCharges is text with some blank values: convert to float with
+      blanks as missing (NaN), do not fill them; (2) MonthlyCharges is dollar text like
+      "$70.35": convert to float; (3) fix Contract labels with the wrong case or extra spaces to
+      the spelling used by most rows. Keep every row and column in the same order.
+    checks:
+      - {kind: matches_expected, columns: [TotalCharges, MonthlyCharges, Contract, tenure]}
+
+  - id: hard-clean-credit-mixed-amounts
+    agent: data_cleaning
+    dataset: credit-g
+    columns: [purpose, credit_amount, age]
+    seed: 23
+    faults:
+      - {kind: mixed_numeric_text, column: credit_amount, frac: 0.08}
+      - {kind: category_variants, column: purpose, frac: 0.15}
+    request: >-
+      (1) credit_amount mixes "$1,234.00", "5.951k" (thousands), plain numbers and "n/a",
+      "N/A", "-" or "" for unknown values: convert to float with unknowns as NaN, no filling.
+      (2) Fix purpose labels with the wrong case or extra spaces to the spelling used by most
+      rows. Keep every row and column in the same order.
+    checks:
+      - {kind: matches_expected, columns: [credit_amount, purpose, age]}
+
+  # ---------------------------------------------------------------- wrangling
+  - id: hard-wr-adult-pivot-hours
+    agent: data_wrangling
+    dataset: adult
+    columns: [sex, race, hours-per-week]
+    rows: 1000
+    request: >-
+      A table of average hours-per-week with one row per sex and one column per race (column
+      names are the race values). Do not round.
+    checks:
+      - {kind: pivot, index: sex, columns: race, value: hours-per-week, agg: mean}
+
+  - id: hard-wr-credit-top2-per-housing
+    agent: data_wrangling
+    dataset: credit-g
+    columns: [housing, purpose, credit_amount]
+    rows: 600
+    request: >-
+      For each housing type, the 2 purposes with the largest total credit_amount, with those
+      totals (6 rows: housing, purpose, total).
+    checks:
+      - {kind: aggregate, group_by: [housing, purpose], value: credit_amount, agg: sum, top: 2, top_per: housing}
+
+  - id: hard-wr-telco-churn-rate
+    agent: data_wrangling
+    dataset: telco-customer-churn
+    columns: [Contract, Churn, tenure]
+    rows: 1500
+    request: >-
+      Churn rate in percent (0 to 100, the share of customers with Churn "Yes") for each
+      Contract type, highest first. Do not round.
+    checks:
+      - {kind: aggregate, group_by: Contract, value: churn_pct, value_expr: "(Churn == 'Yes') * 100", agg: mean, order: desc}
+
+  - id: hard-wr-ames-neighborhood-summary
+    agent: data_wrangling
+    dataset: ames-housing
+    columns: [Neighborhood, Sale_Price, Gr_Liv_Area]
+    rows: 1500
+    request: >-
+      One row per Neighborhood that has at least 20 houses, with the number of houses, the
+      median Sale_Price and the mean Gr_Liv_Area. Leave out neighborhoods with fewer than 20
+      houses. Do not round.
+    checks:
+      - {kind: aggregate, group_by: Neighborhood, value: Sale_Price, agg: count, min_count: 20}
+      - {kind: aggregate, group_by: Neighborhood, value: Sale_Price, agg: median, min_count: 20}
+      - {kind: aggregate, group_by: Neighborhood, value: Gr_Liv_Area, agg: mean, min_count: 20}
+
+  - id: hard-wr-adult-age-bands
+    agent: data_wrangling
+    dataset: adult
+    columns: [age, sex]
+    rows: 1000
+    request: >-
+      Count people in these age bands, using exactly these labels: "under 30", "30-44",
+      "45-64", "65+". Each band includes its lower bound (30 is in "30-44").
+    checks:
+      - {kind: binned_count, column: age, bins: [0, 30, 45, 65, .inf], labels: ["under 30", "30-44", "45-64", "65+"]}
+
+  - id: hard-wr-diabetes-older-glucose-rounded
+    agent: data_wrangling
+    dataset: diabetes
+    request: >-
+      For patients older than 40, the average plas for each class, rounded to 1 decimal place.
+    checks:
+      - {kind: aggregate, group_by: class, value: plas, agg: mean, query: "age > 40", atol: 0.051}
+
+  - id: hard-wr-impossible-income-by-occupation
+    agent: data_wrangling
+    dataset: adult
+    columns: [occupation, class, hours-per-week]
+    request: Average yearly income in US dollars for each occupation.
+    expect_status: failed
+    tags: [impossible]
+    checks:
+      - {kind: no_output}
+
+  # ---------------------------------------------------------------- visualization
+  - id: hard-viz-telco-churn-grouped
+    agent: data_visualization
+    dataset: telco-customer-churn
+    columns: [Contract, Churn]
+    rows: 1000
+    request: >-
+      Grouped bar chart of the number of customers per Contract type, with one bar per Churn
+      value ("Yes", "No") inside each Contract.
+    checks:
+      - {kind: figure_type, types: [bar, histogram]}
+      - {kind: figure_aggregate, group_by: Contract, color: Churn, value: Churn, agg: count}
+
+  - id: hard-viz-credit-sorted-bars
+    agent: data_visualization
+    dataset: credit-g
+    columns: [purpose, credit_amount]
+    request: >-
+      Bar chart of total credit_amount per purpose, with bars sorted from largest to smallest.
+    checks:
+      - {kind: figure_type, types: [bar]}
+      - {kind: figure_aggregate, group_by: purpose, value: credit_amount, agg: sum, order: desc}
+
+  - id: hard-viz-ames-price-by-year
+    agent: data_visualization
+    dataset: ames-housing
+    columns: [Year_Sold, Sale_Price]
+    rows: 1500
+    request: Line chart of the median Sale_Price for each Year_Sold.
+    checks:
+      - {kind: figure_type, types: [scatter, scattergl]}
+      - {kind: figure_aggregate, group_by: Year_Sold, value: Sale_Price, agg: median}
+
+  - id: hard-viz-impossible-income-vs-age
+    agent: data_visualization
+    dataset: adult
+    columns: [age, class, education]
+    request: Scatter plot of yearly income in US dollars against age.
+    expect_status: failed
+    tags: [impossible]
+    checks:
+      - {kind: no_output}

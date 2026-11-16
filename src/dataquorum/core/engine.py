@@ -188,7 +188,8 @@ class Nodes:
         workdir = Path(s.workdir) / f"attempt_{s.attempts}"
         kind = self.spec.output_kind
         run = self.executor.run(s.code, Path(s.input_path), workdir, kind)
-        usage = s.usage.model_copy(update={"seconds": s.usage.seconds + run.seconds})
+        exec_seconds = s.usage.execution_seconds + run.seconds
+        usage = s.usage.model_copy(update={"execution_seconds": exec_seconds})
         output = str(run.output_path) if run.output_path else None
         return {"error": run.error, "output_path": output, "usage": usage}
 

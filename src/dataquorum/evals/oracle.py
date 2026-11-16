@@ -12,12 +12,13 @@ For every task:
 from __future__ import annotations
 
 import sys
+from collections import Counter
 from typing import Any
 
 import pandas as pd
 import plotly.express as px
 
-from dataquorum.evals.checkers import Output, run_checker
+from dataquorum.evals.checkers import Output, expected_aggregate, run_checker
 from dataquorum.evals.tasks import BuiltTask, Task, build, load_tasks
 
 
@@ -28,14 +29,16 @@ def _spec(task: Task, kind: str) -> dict[str, Any] | None:
     return None
 
 
-def _aggregate_frame(b: BuiltTask, p: dict[str, Any]) -> pd.DataFrame:
+def _aggregate_frame(
+    b: BuiltTask, p: dict[str, Any], extra_keys: list[str] | None = None
+) -> pd.DataFrame:
     keys = [p["group_by"]] if isinstance(p["group_by"], str) else list(p["group_by"])
-    source = b.clean.query(p["query"], engine="python") if p.get("query") else b.clean
-    grouped = source.groupby(keys)[p["value"]]
-    series = grouped.size() if p.get("agg") == "count" else grouped.agg(p.get("agg", "sum"))
-    if p.get("top"):
-        series = series.sort_values(ascending=False).head(p["top"])
-    elif p.get("order"):
+    keys += extra_keys or []
+    series = expected_aggregate(
+        b, keys, p["value"], p.get("agg", "sum"), p.get("query"), p.get("value_expr"),
+        p.get("min_count"), p.get("top"), p.get("top_per"),
+    )  # fmt: skip
+    if p.get("order") and not p.get("top_per"):
         series = series.sort_values(ascending=p["order"] != "desc")
     frame: pd.DataFrame = series.rename("result").reset_index()
     return frame
@@ -47,15 +50,40 @@ def oracle_output(b: BuiltTask) -> Output:
         return None
     if t.agent == "data_cleaning":
         return b.expected
-    if (p := _spec(t, "aggregate")) is not None:
-        return _aggregate_frame(b, p)
+    aggregates = [c.params for c in t.checks if c.kind == "aggregate"]
+    if aggregates:
+        # Several aggregate checks (e.g. count, median, mean per group) -> one table.
+        frame = _aggregate_frame(b, aggregates[0])
+        for i, extra in enumerate(aggregates[1:], 1):
+            by = extra["group_by"]
+            keys = [by] if isinstance(by, str) else list(by)
+            more = _aggregate_frame(b, extra).rename(columns={"result": f"result_{i}"})
+            frame = frame.merge(more, on=keys, how="left")
+        return frame
+    if (p := _spec(t, "pivot")) is not None:
+        table = b.clean.pivot_table(index=p["index"], columns=p["columns"], values=p["value"],
+                                    aggfunc=p.get("agg", "mean"))  # fmt: skip
+        flat: pd.DataFrame = table.reset_index()
+        return flat
+    if (p := _spec(t, "binned_count")) is not None:
+        bands = pd.cut(
+            b.clean[p["column"]], bins=p["bins"], labels=p["labels"], right=p.get("right", False)
+        )
+        counts: pd.DataFrame = pd.Series(bands).value_counts().rename("n").reset_index()
+        return counts
     if (p := _spec(t, "filter_rows")) is not None:
         return b.clean.query(p["query"], engine="python")
     if (p := _spec(t, "derived_column")) is not None:
         return b.clean.assign(result=pd.Series(b.clean.eval(p["expression"])))
     if (p := _spec(t, "figure_aggregate")) is not None:
-        frame = _aggregate_frame(b, p)
-        return dict(px.bar(frame, x=p["group_by"], y="result").to_plotly_json())
+        color = p.get("color")
+        frame = _aggregate_frame(b, p, [color] if color else None)
+        wanted = (_spec(t, "figure_type") or {}).get("types", ["bar"])
+        if "bar" in wanted or "histogram" in wanted:
+            figure = px.bar(frame, x=p["group_by"], y="result", color=color, barmode="group")
+        else:
+            figure = px.line(frame, x=p["group_by"], y="result", color=color)
+        return dict(figure.to_plotly_json())
     types = (_spec(t, "figure_type") or {}).get("types", [])
     first, second = b.clean.columns[0], b.clean.columns[1]
     if "histogram" in types:
@@ -76,9 +104,36 @@ def _as_json(output: Output) -> Output:
     return output
 
 
+def label_problems(b: BuiltTask) -> list[str]:
+    """Text answers must be knowable from the input: for "use the spelling most rows use",
+    each expected label has to be the strict-majority spelling among its case/space variants
+    in the messy input. (Week 8: a rare label that only appeared as a variant made a correct
+    agent look like a false success.)"""
+    problems = []
+    for spec in b.task.checks:
+        if spec.kind != "matches_expected":
+            continue
+        for col in spec.params.get("columns", []):
+            if col not in b.messy or b.expected[col].dtype != object:
+                continue
+            spellings: dict[str, Counter[str]] = {}
+            for v in b.messy[col]:
+                if isinstance(v, str):
+                    spellings.setdefault(v.strip().lower(), Counter())[v] += 1
+            for label in set(b.expected[col].dropna()):
+                counts = spellings.get(str(label).strip().lower(), Counter())
+                top = counts.most_common(2)
+                if counts and (counts[label] == 0 or (len(top) > 1 and top[1][1] >= counts[label]
+                               and top[0][0] != label) or counts[label] < max(counts.values())):  # fmt: skip
+                    problems.append(
+                        f"{col}: {label!r} is not the majority spelling in the input {dict(counts)}"
+                    )
+    return problems
+
+
 def check_task(b: BuiltTask) -> list[str]:
     """Problems with one task; empty when the task is well formed."""
-    problems = []
+    problems = label_problems(b)
     oracle = _as_json(oracle_output(b))
     for spec in b.task.checks:
         outcome = run_checker(spec.kind, b, oracle, spec.params)

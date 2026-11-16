@@ -1,6 +1,6 @@
 [project]
 name = "dataquorum"
-version = "0.0.1"
+version = "0.1.0"
 description = "A team of AI data-science agents that must prove their work."
 readme = "README.md"
 license = "MIT"
@@ -8,7 +8,7 @@ license-files = ["LICENSE"]
 authors = [{ name = "krtk06" }]
 requires-python = ">=3.12,<3.13"
 classifiers = [
-    "Development Status :: 1 - Planning",
+    "Development Status :: 3 - Alpha",
     "Intended Audience :: Science/Research",
     "Programming Language :: Python :: 3.12",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
@@ -85,6 +85,8 @@ known-third-party = ["docker"]
 "src/dataquorum/evals/scoring.py" = ["E501"]
 "src/dataquorum/evals/runner.py" = ["E501"]
 "src/dataquorum/evals/compare.py" = ["E501"]
+"src/dataquorum/evals/oracle.py" = ["E501"]
+"src/dataquorum/evals/faults.py" = ["E501"]
 "src/dataquorum/evals/parity/run.py" = ["E501"]
 "images/original/worker.py" = ["E501"]
 "tests/test_evals.py" = ["E501"]

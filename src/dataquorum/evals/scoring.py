@@ -43,7 +43,9 @@ class TaskResult:
     completion_tokens: int = 0
     reasoning_tokens: int = 0
     allowance_usd: float = 0.0
-    seconds: float = 0.0
+    seconds: float = 0.0  # total: LLM + sandbox
+    llm_seconds: float = 0.0
+    execution_seconds: float = 0.0
     repeat: int = 0  # 0..repeats-1 when each task is run several times
     extra: dict[str, Any] = field(default_factory=dict)
 

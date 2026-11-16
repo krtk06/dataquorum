@@ -239,3 +239,25 @@ def test_compare_two_runs(tmp_path: Path) -> None:
     assert "B - A cost per task: +0.001" in report
     assert "- t6: A ['correct'] -> B ['false_success']" in report
     assert "no_checks" in report
+
+
+def test_category_variants_keep_the_original_spelling_a_strict_majority() -> None:
+    frame = pd.DataFrame({"label": ["rare"] + ["two"] * 2 + ["five"] * 5 + ["common"] * 32})
+    f = apply_faults(frame, [FaultSpec(kind="category_variants", column="label", frac=0.9)], 0)
+    for label in frame["label"].unique():
+        spellings = f.messy["label"][f.messy["label"].str.strip().str.lower() == label]
+        exact = int((spellings == label).sum())
+        assert exact > len(spellings) - exact, (label, spellings.tolist())
+    assert (f.messy["label"] == "rare").sum() == 1  # a single label is never varied
+
+
+def test_oracle_flags_a_label_that_only_appears_as_a_variant() -> None:
+    from dataquorum.evals.oracle import label_problems
+    from dataquorum.evals.tasks import BuiltTask
+
+    t = task(checks=[{"kind": "matches_expected", "columns": ["region"]}])
+    clean = pd.DataFrame({"region": ["Rare_Place", "north", "north"]})
+    messy = pd.DataFrame({"region": ["rare_place", "north", "north"]})
+    problems = label_problems(BuiltTask(t, clean, messy, clean, "r"))
+    assert problems and "Rare_Place" in problems[0]
+    assert label_problems(BuiltTask(t, clean, clean, clean, "r")) == []

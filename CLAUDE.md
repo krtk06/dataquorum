@@ -86,7 +86,7 @@ tests/
 
 ## Open items
 - **PyPI placeholder:** `dist/dataquorum-0.0.1` is built (`uv build`); the user uploads it with `uv publish` and their own PyPI token. Name was still free on 2026-11-16.
-- **Go docs (checked 2026-11-16):** endpoint and model IDs (`deepseek-v4.1-flash`, `glm-5.3-flash`) match. Go docs say DeepSeek V4.1 Flash is **restricted by default** and needs Settings > Privacy > Regions > **Global** (default is Europe & US). This conflicts with "keep default privacy settings"; the user must decide. Auth header is not documented; assumed `Authorization: Bearer` (OpenAI-compatible).
+- **Go docs (checked 2026-11-16):** endpoint and model IDs (`deepseek-v4.1-flash`, `glm-5.3-flash`) match. Go docs say DeepSeek V4.1 Flash is **restricted by default** and needs Settings > Privacy > Regions > **Global** (default is Europe & US). **Decided 2026-11-16: enable Global** so DeepSeek V4.1 Flash is usable; keep the other default privacy settings (the block on models that train on prompts stays on). Recheck DeepSeek's zero-retention terms monthly. Auth header is not documented; assumed `Authorization: Bearer` (OpenAI-compatible).
 - **Week 1 checks:** does DeepSeek emit reasoning tokens (affects cost)? `scripts/go_smoke_test.py` answers this. Does the original tool work against Go's endpoint (needed for the parity test)?
 - **Not installed yet:** Docker (WSL2 3.0.5 is present), Java 17+, Ollama.
 

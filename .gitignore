@@ -18,6 +18,9 @@ build/
 .coverage
 htmlcov/
 
+# Original project (parity reference), cloned locally with its own venv
+.original/
+
 # Local run data
 runs/
 mlruns/

@@ -1,31 +1,46 @@
-"""Run generated code in a locked-down Docker container (spec S5).
+"""Run generated code in a locked-down Docker container (spec S5), via the docker SDK.
 
-The flags below were verified on 2026-11-16 (network, root-fs writes, input writes, chown,
-memory and fork bombs all blocked). Week 5 adds the escape-test suite and the docker SDK.
+Isolation (all verified by tests/sandbox/test_escapes.py):
+- no network (`network_mode="none"`), no IPC namespace sharing
+- read-only root filesystem; input mounted read-only at /io/in
+- no writable host mount at all: `/tmp` is a size-limited tmpfs (`noexec`, `nosuid`), and
+  the result is read out of it with `exec cat` while the container is still alive
+- non-root user 10001, all Linux capabilities dropped, no-new-privileges
+- memory (no swap), CPU, PID and open-file limits; capped container logs
+- wall-clock timeout; the container is always force-removed
 
-Data flow: the host writes `code.py`, `runner.py` and `input.parquet` to `<workdir>/in`
-(mounted read-only); the container writes its output to `<workdir>/out`.
-Image: `docker/sandbox` (pandas, numpy, pyarrow, plotly only).
+Generated-code problems (crash, timeout, out of memory, output too large) come back as
+`ExecutionResult(ok=False, ...)` so the engine can retry. Sandbox infrastructure problems
+(Docker not running, image missing) raise `SandboxUnavailableError`: retrying with the
+LLM cannot fix those.
 """
 
 from __future__ import annotations
 
+import contextlib
 import json
 import shutil
-import subprocess
 import time
-import uuid
-from dataclasses import dataclass
 from pathlib import Path
+from typing import Any, cast
+
+import docker
+from docker.errors import DockerException, ImageNotFound, NotFound
+from docker.models.containers import Container
+from docker.types import LogConfig, Ulimit
 
 from dataquorum.sandbox.executor import FUNCTION_NAMES, OUTPUT_FILES, ExecutionResult, OutputKind
 
-# Runs inside the container: python runner.py <function name> <output file>
+LABEL = "dataquorum.sandbox"
+DONE = "__DQ_DONE__"
+USER = "10001:10001"
+
+# Runs inside the container: python runner.py <function name> <output path>
 RUNNER = """
-import json, sys, traceback
+import json, os, sys, traceback
 import pandas as pd
 
-func_name, out_file = sys.argv[1], sys.argv[2]
+func_name, out_path = sys.argv[1], sys.argv[2]
 meta = {"ok": False, "error": None}
 try:
     namespace = {}
@@ -35,36 +50,58 @@ try:
         raise NameError(f"The code does not define {func_name}(df).")
     df = pd.read_parquet("/io/in/input.parquet")
     out = namespace[func_name](df.copy())
-    if out_file.endswith(".parquet"):
+    os.makedirs(os.path.dirname(out_path), exist_ok=True)
+    if out_path.endswith(".parquet"):
         if not isinstance(out, pd.DataFrame):
             raise TypeError(f"{func_name}() returned {type(out).__name__}, not a DataFrame.")
-        out.to_parquet("/io/out/" + out_file, index=False)
+        out.to_parquet(out_path, index=False)
     else:
         if not hasattr(out, "to_json"):
             raise TypeError(f"{func_name}() returned {type(out).__name__}, not a Plotly figure.")
-        with open("/io/out/" + out_file, "w", encoding="utf-8") as f:
+        with open(out_path, "w", encoding="utf-8") as f:
             f.write(out.to_json())
     meta["ok"] = True
-except Exception as exc:
-    meta["error"] = f"{type(exc).__name__}: {exc}"
-    meta["traceback"] = traceback.format_exc()[-1500:]
-print(json.dumps(meta))
+except BaseException as exc:
+    meta["error"] = f"{type(exc).__name__}: {exc}"[:2000]
+sys.stdout.write("\\n" + json.dumps(meta) + "\\n")
+sys.stdout.flush()
 """
 
 
-def docker_exe() -> str:
-    # On Windows, PATH also holds an extension-less `docker` shim that CreateProcess can't run.
-    found = shutil.which("docker.exe") or shutil.which("docker")
-    return found or r"C:\Program Files\Docker\Docker\resources\bin\docker.exe"
+class SandboxUnavailableError(RuntimeError):
+    """Docker or the sandbox image is not available. Not the generated code's fault."""
 
 
-@dataclass(frozen=True)
 class DockerExecutor:
-    image: str = "dataquorum/sandbox:0.1"
-    timeout_seconds: int = 60
-    memory: str = "1g"
-    cpus: str = "1"
-    pids_limit: int = 64
+    def __init__(
+        self,
+        image: str = "dataquorum/sandbox:0.1",
+        *,
+        timeout_seconds: float = 60,
+        memory: str = "1g",
+        cpus: float = 1.0,
+        pids_limit: int = 64,
+        tmp_size_mb: int = 256,
+        max_output_mb: int = 100,
+        client: docker.DockerClient | None = None,
+    ) -> None:
+        self.image = image
+        self.timeout_seconds = timeout_seconds
+        self.memory = memory
+        self.cpus = cpus
+        self.pids_limit = pids_limit
+        self.tmp_size_mb = tmp_size_mb
+        self.max_output_bytes = max_output_mb * 1024 * 1024
+        self._client = client
+
+    @property
+    def client(self) -> docker.DockerClient:
+        if self._client is None:
+            try:
+                self._client = docker.from_env()
+            except DockerException as exc:
+                raise SandboxUnavailableError(f"Docker is not reachable: {exc}") from exc
+        return self._client
 
     def run(
         self, code: str, input_path: Path, workdir: Path, kind: OutputKind = "dataframe"
@@ -76,33 +113,119 @@ class DockerExecutor:
         (in_dir / "runner.py").write_text(RUNNER, encoding="utf-8")
         shutil.copy(input_path, in_dir / "input.parquet")
 
-        name = f"dq-exec-{uuid.uuid4().hex[:10]}"
-        out_file = OUTPUT_FILES[kind]
-        cmd = [
-            docker_exe(), "run", "--rm", "--name", name,
-            "--network", "none", "--read-only", "--tmpfs", "/tmp:rw,size=64m,mode=1777",
-            "--memory", self.memory, "--memory-swap", self.memory, "--cpus", self.cpus,
-            "--pids-limit", str(self.pids_limit), "--user", "10001:10001",
-            "--cap-drop", "ALL", "--security-opt", "no-new-privileges",
-            "-v", f"{in_dir.resolve()}:/io/in:ro", "-v", f"{out_dir.resolve()}:/io/out",
-            self.image, "python", "/io/in/runner.py", FUNCTION_NAMES[kind], out_file,
-        ]  # fmt: skip
+        out_name = OUTPUT_FILES[kind]
+        inner_path = f"/tmp/out/{out_name}"
+        hold = int(self.timeout_seconds) + 30  # keep the container alive to read the output
+        script = (
+            f"python /io/in/runner.py {FUNCTION_NAMES[kind]} {inner_path}; "
+            f"echo {DONE} $?; sleep {hold}"
+        )
         start = time.perf_counter()
+        container = self._start(script, in_dir)
         try:
-            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=self.timeout_seconds)
-        except subprocess.TimeoutExpired:
-            subprocess.run([docker_exe(), "kill", name], capture_output=True)
+            finished, exit_code = self._wait(container, start + self.timeout_seconds)
             elapsed = time.perf_counter() - start
-            return ExecutionResult(
-                False, f"Timed out after {self.timeout_seconds} s.", None, elapsed
-            )
-        seconds = time.perf_counter() - start
+            if not finished:
+                return ExecutionResult(
+                    False, f"Timed out after {self.timeout_seconds:g} s.", None, elapsed
+                )
+            meta = _last_meta(container.logs(stdout=True, stderr=False, tail=200))
+            if meta is None:
+                return ExecutionResult(False, _no_result_message(exit_code), None, elapsed)
+            if not meta.get("ok"):
+                return ExecutionResult(False, str(meta.get("error")), None, elapsed)
+            data, problem = self._read_output(container, inner_path)
+            if problem:
+                return ExecutionResult(False, problem, None, time.perf_counter() - start)
+            target = out_dir / out_name
+            target.write_bytes(data)
+            return ExecutionResult(True, None, target, time.perf_counter() - start)
+        finally:
+            with contextlib.suppress(DockerException):
+                container.remove(force=True)
 
-        lines = [ln for ln in proc.stdout.splitlines() if ln.startswith("{")]
-        if not lines:
-            error = f"Sandbox gave no result: {proc.stderr[-500:]}"
-            return ExecutionResult(False, error, None, seconds)
-        meta = json.loads(lines[-1])
-        if not meta["ok"]:
-            return ExecutionResult(False, meta["error"], None, seconds)
-        return ExecutionResult(True, None, out_dir / out_file, seconds)
+    def _start(self, script: str, in_dir: Path) -> Container:
+        tmpfs_opts = f"rw,nosuid,nodev,noexec,size={self.tmp_size_mb}m,mode=1777"
+        kwargs: dict[str, Any] = {
+            "detach": True,
+            "network_mode": "none",
+            "ipc_mode": "none",
+            "read_only": True,
+            "tmpfs": {"/tmp": tmpfs_opts},
+            "volumes": {str(in_dir.resolve()): {"bind": "/io/in", "mode": "ro"}},
+            "user": USER,
+            "cap_drop": ["ALL"],
+            "security_opt": ["no-new-privileges"],
+            "mem_limit": self.memory,
+            "memswap_limit": self.memory,
+            "nano_cpus": int(self.cpus * 1e9),
+            "pids_limit": self.pids_limit,
+            "ulimits": [Ulimit(name="nofile", soft=256, hard=256)],
+            "environment": {},
+            "hostname": "sandbox",
+            "labels": {LABEL: "1"},
+            "log_config": LogConfig(
+                type=LogConfig.types.JSON, config={"max-size": "2m", "max-file": "1"}
+            ),
+        }
+        try:
+            container: Container = self.client.containers.run(
+                self.image, ["sh", "-c", script], **kwargs
+            )
+        except ImageNotFound as exc:
+            raise SandboxUnavailableError(
+                f"Sandbox image {self.image} not found. Build it with: "
+                f"docker build -t {self.image} images/sandbox"
+            ) from exc
+        except DockerException as exc:
+            raise SandboxUnavailableError(f"Could not start the sandbox: {exc}") from exc
+        return container
+
+    def _wait(self, container: Container, deadline: float) -> tuple[bool, int | None]:
+        """Wait for the DONE marker. Returns (finished, runner exit code)."""
+        while time.perf_counter() < deadline:
+            for line in container.logs(stdout=True, stderr=False, tail=5).splitlines():
+                text = line.decode("utf-8", "replace")
+                if text.startswith(DONE):
+                    parts = text.split()
+                    return True, int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else None
+            container.reload()
+            if container.status == "exited":
+                return True, None
+            time.sleep(0.2)
+        return False, None
+
+    def _read_output(self, container: Container, inner_path: str) -> tuple[bytes, str | None]:
+        limit = self.max_output_bytes
+        try:
+            result = container.exec_run(
+                ["head", "-c", str(limit + 1), inner_path], user=USER, demux=True
+            )
+        except (NotFound, DockerException) as exc:
+            return b"", f"Could not read the output: {exc}"
+        stdout, _ = cast(tuple[bytes | None, bytes | None], result.output)
+        if result.exit_code != 0 or stdout is None:
+            return b"", "The code reported success but wrote no output."
+        if len(stdout) > limit:
+            return b"", f"Output is larger than {limit // (1024 * 1024)} MB."
+        return stdout, None
+
+
+def _last_meta(logs: bytes) -> dict[str, Any] | None:
+    for line in reversed(logs.decode("utf-8", "replace").splitlines()):
+        line = line.strip()
+        if line.startswith("{") and '"ok"' in line:
+            try:
+                meta: dict[str, Any] = json.loads(line)
+                return meta
+            except json.JSONDecodeError:
+                continue
+    return None
+
+
+def _no_result_message(exit_code: int | None) -> str:
+    if exit_code == 137:
+        return "The code was killed (exit 137), most likely for using too much memory."
+    if exit_code is not None:
+        return f"The code exited abnormally (exit {exit_code}) without a result."
+    return "The sandbox stopped without a result."

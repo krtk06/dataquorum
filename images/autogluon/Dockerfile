@@ -1,5 +1,5 @@
 # AutoGluon Tabular runtime for DataQuorum's AutoML benchmark (week 10).
-# CPU only. Build:  docker build -t dataquorum/autogluon:1.6.3 docker/autogluon
+# CPU only. Build:  docker build -t dataquorum/autogluon:1.6.3 images/autogluon
 #
 # Run it like the sandbox: no network, read-only root, data in/out through /io.
 #   docker run --rm --network none --read-only --tmpfs /tmp:size=512m \

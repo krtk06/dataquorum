@@ -41,3 +41,21 @@ jobs:
       - name: Test against pandas 3
         if: matrix.pandas == 'pandas 3'
         run: uv run --with "pandas>=3" pytest
+
+  sandbox:
+    name: sandbox escape tests (Docker)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.3.3
+        with:
+          enable-cache: true
+      - name: Build the sandbox image
+        run: docker build -t dataquorum/sandbox:0.1 images/sandbox
+      - name: Install
+        run: uv sync --locked
+      - name: Escape and executor tests
+        # Fails if the image is missing instead of silently skipping.
+        run: |
+          docker image inspect dataquorum/sandbox:0.1 > /dev/null
+          uv run pytest -m docker -v

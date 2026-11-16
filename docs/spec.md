@@ -102,24 +102,40 @@ fix; they make the final status `needs_review`.
 
 All generated code runs here. There is no `exec()` path in the host process. (Bug log #2-#4.)
 
-Container settings:
-- `network_mode="none"`
-- read-only root filesystem; writable `/tmp` tmpfs (64 MB); data mounted at `/io`
-  (input read-only, output dir writable)
-- `mem_limit` 1 GB (configurable), `nano_cpus` 1 CPU, `pids_limit` 64
-- non-root user, `cap_drop=["ALL"]`, `security_opt=["no-new-privileges"]`
-- wall-clock timeout (default 60 s); container killed and removed on timeout
-- image `dataquorum/sandbox:0.1` built from `docker/sandbox/` (base pinned by digest):
+Container settings (week 5, docker SDK):
+- `network_mode="none"`, `ipc_mode="none"`, empty environment, hostname `sandbox`
+- read-only root filesystem; input mounted read-only at `/io/in`
+- **no writable host mount**: `/tmp` is a 256 MB tmpfs with `noexec,nosuid,nodev`; the
+  runner writes the result to `/tmp/out/`, and the host reads it with `exec head -c` while
+  the container is still alive, capped at 100 MB. (`docker cp`/`get_archive` cannot see
+  tmpfs, verified 2026-11-16.) This closes the week-4 gap where code could fill the host
+  disk through a writable bind mount.
+- `mem_limit` 1 GB with no swap, `nano_cpus` 1 CPU, `pids_limit` 64, `nofile` 256
+- container logs capped at 2 MB (json-file, one file), so a stdout flood cannot fill disk
+- non-root user 10001, `cap_drop=["ALL"]`, `security_opt=["no-new-privileges"]`
+- wall-clock timeout (default 60 s); the container is always force-removed; containers
+  carry the label `dataquorum.sandbox` so leftovers are easy to find
+- generated-code failures return `ExecutionResult(ok=False)`; Docker down or image missing
+  raise `SandboxUnavailableError` (the engine must not burn LLM retries on those)
+- image `dataquorum/sandbox:0.1` built from `images/sandbox/` (base pinned by digest):
   pandas 2.3.3, numpy 2.5.5, pyarrow 26.0.1, plotly 7.1.0 only (~700 MB; full set in
   `requirements.lock`). scikit-learn is added when the feature-engineering agent needs it.
 
-Protocol: host writes `input.parquet` and `code.py` (defines one function with a fixed
-name); the runner inside calls it and writes `output.parquet` (or `output.json` for
-figures) plus `meta.json` (stdout, stderr tail, duration, exception type and message).
+Protocol: host writes `input.parquet`, `code.py` and `runner.py` to the input mount. The
+container runs `python runner.py <function> /tmp/out/<file>; echo __DQ_DONE__ $?; sleep`.
+The runner prints one JSON line (`ok`, `error`); the host waits for the done marker, reads
+the JSON line from the log tail, copies the output out, then removes the container.
+Exit 137 is reported as "killed, most likely for using too much memory".
 
-Escape tests (week 5) must show each of these fails: network access, writing outside
-`/tmp` and `/io/out`, reading host files, fork bomb, memory bomb, infinite loop, importing
-blocked-in-the-original modules (`os`, `subprocess`) to do any of the above.
+Escape tests (`tests/sandbox/test_escapes.py`, marker `docker`, run in the CI `sandbox`
+job which builds the image): TCP connection, DNS lookup, writing to `/etc`, `/usr`, the input
+data and the runner, `setuid(0)`, `chown` to root, raw sockets, `mount`, `su`, the Docker
+socket, executing a script from `/tmp`, `/proc/sysrq-trigger`, seeing host environment
+variables (including the API key), filling `/tmp`, forking 200 processes, allocating 3 GB.
+Plus: runs as uid/gid 10001 with zero effective and bounding capabilities and
+NoNewPrivs=1; `/` and `/io/in` are read-only; `/tmp` is noexec/nosuid; infinite loops time
+out; a 20 MB stdout flood does not break a run; oversize output is rejected; no container is
+left behind after any test.
 
 ## S6. Engine (`core/engine.py`, LangGraph)
 

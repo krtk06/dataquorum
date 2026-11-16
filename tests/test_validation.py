@@ -73,3 +73,11 @@ def test_a_check_that_raises_is_a_failed_check() -> None:
 )
 def test_missing_like(values: list[object], expected: int) -> None:
     assert missing_like(pd.Series(values)) == expected
+
+
+def test_requested_blanking_is_not_a_warning() -> None:
+    after = BEFORE.assign(age=[np.nan, np.nan, 40.0, 50.0])
+    asked = CheckContext(request="Values of age above 45 are typos; set them to missing (NaN).")
+    assert results(after, asked)["missing_values_increased"].passed
+    other_column = CheckContext(request="Set city outliers to missing.")
+    assert not results(after, other_column)["missing_values_increased"].passed

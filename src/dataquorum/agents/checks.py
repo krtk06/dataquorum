@@ -30,7 +30,10 @@ def duplicate_rows_not_increased(
     before: pd.DataFrame, after: pd.DataFrame, ctx: CheckContext
 ) -> CheckResult:
     b, a = int(before.duplicated().sum()), int(after.duplicated().sum())
-    return _result(a <= b, f"duplicate rows {b} -> {a}")
+    # Imputation can make small rows identical without adding any; only added rows count.
+    if len(after) <= len(before):
+        return _result(True, f"no rows added (duplicate rows {b} -> {a})")
+    return _result(a <= b, f"rows added and duplicate rows {b} -> {a}")
 
 
 UNIQUE_COLUMN_NAMES = Check("unique_column_names", Severity.BLOCKING, unique_column_names)

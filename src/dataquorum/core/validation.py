@@ -124,9 +124,14 @@ def missing_values_increased(
         for c in before.columns
         if c in after.columns and missing_like(after[c]) > missing_like(before[c])
     }
-    if not grew:
-        return _result(True, "no column gained missing values")
-    return _result(False, "missing values grew (before, after): " + str(grew))
+    # "Set outliers in age to missing" asks for exactly this; only unrequested growth warns.
+    asked_to_blank = ctx.mentions(
+        "to missing", "with missing", "as missing", "to nan", "with nan", "as nan", "to null"
+    )
+    unrequested = {c: v for c, v in grew.items() if not (asked_to_blank and ctx.mentions(c))}
+    if not unrequested:
+        return _result(True, "no unrequested growth in missing values")
+    return _result(False, "missing values grew (before, after): " + str(unrequested))
 
 
 def numeric_became_text(

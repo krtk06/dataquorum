@@ -109,6 +109,8 @@ def test_point_count_reads_plotly_typed_arrays() -> None:
     [
         ("data_cleaning", SALES.assign(extra=np.nan), ["no_all_null_columns"]),
         ("data_cleaning", pd.concat([SALES, SALES.iloc[:1]]), ["duplicate_rows_not_increased"]),
+        # imputation made two rows identical but added none: not a warning
+        ("data_cleaning", SALES.assign(revenue=100.0), []),
         ("data_wrangling", SALES.iloc[:1], []),
     ],
 )

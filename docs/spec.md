@@ -41,6 +41,13 @@ class AgentResult(BaseModel):
 LLM calls, retries, wall time. `CheckResult`: name, passed, severity (`blocking` / `warning`),
 detail.
 
+Implemented in `core/statuses.py` (`Status`, `Severity`, `CheckResult`, `decide_status`) and
+`core/state.py` (`AgentResult` plus `parent_run_id` and `created_at`; outputs are
+`DataFrameOutput` (Parquet path + shape + dtypes), `FigureOutput` (Plotly JSON),
+`ModelOutput` (URI + framework + metrics) and `TextOutput`, told apart by `kind`). Agents
+build results with `AgentResult.from_run(...)`, which computes the status; a validator
+rejects any result that breaks the rules below, even one built by hand.
+
 Rules:
 - **Never a false success.** `success` requires a non-empty output and all blocking checks
   passed. Retries exhausted means `failed`, with `error` set. (Bug log #5, #6.)

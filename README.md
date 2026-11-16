@@ -2,11 +2,11 @@
 
 **A team of AI data-science agents that must prove their work.**
 
-> Status: **v0.1.0 released; main is at week 9 of 17.** Seven agents work end to end: cleaning,
+> Status: **v0.1.0 released; main is at week 10 of 17.** Seven agents work end to end: cleaning,
 > wrangling, visualization, loader (folders of files), SQL (read-only queries on SQLite or
 > DuckDB), EDA (with findings checked against the numbers) and feature engineering
-> (scikit-learn, with target-leakage checks). AutoML, a supervisor and the Studio app are
-> still to come.
+> (scikit-learn, with target-leakage checks). AutoML runs FLAML, H2O or AutoGluon behind one
+> interface. An ML-correctness agent, a supervisor and the Studio app are still to come.
 
 DataQuorum is a Python library of LLM agents for data-science work. An agent takes a pandas
 DataFrame and a request in plain English, writes code, runs it in a locked-down Docker
@@ -99,6 +99,7 @@ uv run python -m dataquorum.evals.compare runs/evals/<A> runs/evals/<B>
 Results so far: [week 6 baseline](docs/results/week6-baseline.md),
 [week 7 parity](docs/results/week7-parity.md), [week 8 hard tasks](docs/results/week8-hard-tasks.md),
 [week 9 new agents](docs/results/week9-new-agents.md),
+[week 10 AutoML benchmark](docs/results/week10-automl.md),
 [reasoning-effort experiment](research/reasoning_effort/README.md).
 
 ## Project layout
@@ -110,7 +111,8 @@ src/dataquorum/
   sandbox/   Docker executor
   tracing/   DuckDB run recorder
   evals/     datasets, faults, tasks (YAML), checkers, oracle, runner, stats, parity
-images/      sandbox, original (parity), autogluon
+  ml/        automl (FLAML, H2O, AutoGluon behind one interface) and its benchmark
+images/      sandbox, original (parity), autogluon, automl
 docs/        spec, bug log of the original, results
 ```
 

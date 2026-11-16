@@ -275,3 +275,22 @@ Implemented (week 6), all in `src/dataquorum/evals/`:
   `label_problems` rejects any task whose expected label is not the majority spelling in its
   input. (A rare label that appeared only as a variant once made a correct agent look like a
   false success.)
+
+## S11. AutoML (`ml/automl/`, week 10)
+
+- One interface, `fit_predict(train, test, target, task_type, backend, budget_s, seed)`, for
+  FLAML, H2O and AutoGluon. Returns an `AutoMLResult` (ok, test predictions, meta, error).
+- Each call runs our own fixed `runner.py` (not LLM output) in a container: no network,
+  read-only root, 1.5 GB `/tmp` tmpfs, input mounted read-only, uid 10001, all capabilities
+  dropped, no-new-privileges, 2 CPUs, 3 GB memory (no swap), 2,048 PIDs. Images:
+  `dataquorum/automl:0.1` (FLAML + H2O + Java 21) and `dataquorum/autogluon:1.6.3`.
+- **No backend grades itself:** the runner returns test predictions (and the positive-class
+  probability for binary tasks); the host computes the metric.
+- Benchmark (`benchmark.py`): 8 OpenML tasks (4 binary scored by ROC AUC, 2 multiclass by
+  accuracy, 2 regression by RMSE), seeded 75/25 splits (stratified for classification),
+  the same split for every backend, 60 s budget, 3 seeds, one container at a time.
+  Comparison: per-task mean over seeds → Friedman test, average ranks, Nemenyi critical
+  difference (`evals/stats.py`, checked against SciPy). Results resume from JSONL.
+- Known asymmetries: AutoGluon 1.6 has no fit-level seed (the seed only changes the split);
+  H2O's `max_runtime_secs` excludes JVM start-up and prediction; AutoGluon's
+  `medium_quality` preset may stop before the budget.

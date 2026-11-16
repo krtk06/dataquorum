@@ -76,7 +76,10 @@ def run_h2o(job: dict[str, Any], train: pd.DataFrame, test: pd.DataFrame) -> dic
         preds = aml.leader.predict(h2o.H2OFrame(test)).as_data_frame(use_multi_thread=False)
         out = {"pred": preds["predict"].to_numpy()}
         if task == "binary":
-            out["proba"] = preds[str(job["positive"])].to_numpy()
+            # Probability columns follow the factor levels, but H2O renames number-like levels
+            # ("2" -> "p2"), so locate the column by level position, not by name.
+            levels = [str(v) for v in frame[target].levels()[0]]
+            out["proba"] = preds.iloc[:, 1 + levels.index(str(job["positive"]))].to_numpy()
         n_models = int(aml.leaderboard.nrows)
         return {
             "frame": pd.DataFrame(out),

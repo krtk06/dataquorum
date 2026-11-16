@@ -1,6 +1,12 @@
 # Changelog
 
-## Unreleased (week 9)
+## Unreleased (weeks 9–10)
+
+- AutoML behind one interface (`dataquorum.ml.automl.fit_predict`): FLAML, H2O and
+  AutoGluon, each in a locked-down container, scored on the host from test predictions.
+- AutoML benchmark on 8 OpenML tasks (`python -m dataquorum.ml.automl.benchmark`) with a
+  Friedman test, average ranks and Nemenyi critical difference (`evals.stats.friedman`).
+- Image `dataquorum/automl:0.1` (FLAML 2.8.0, H2O 3.46.0.12, Java 21).
 
 - Loader agent (a folder of CSV/TSV/Excel/JSON/Parquet files, mounted read-only), SQL agent
   (sqlglot guard plus read-only SQLite/DuckDB connections), EDA agent (findings whose numbers

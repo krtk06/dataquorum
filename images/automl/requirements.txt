@@ -6,4 +6,4 @@ scikit-learn==1.9.1
 h2o==3.46.0.12
 flaml[automl]==2.8.0
 lightgbm==4.7.0
-xgboost==3.4.1
+xgboost==2.1.4  # flaml[automl] 2.8.0 requires xgboost<3

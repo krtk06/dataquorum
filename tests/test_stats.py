@@ -59,3 +59,32 @@ def test_bootstrap_ci_brackets_the_mean_and_matches_scipy() -> None:
     ref = sps.bootstrap((values,), np.mean, n_resamples=20_000, method="percentile", random_state=3)
     assert lo == pytest.approx(ref.confidence_interval.low, rel=0.05)
     assert hi == pytest.approx(ref.confidence_interval.high, rel=0.05)
+
+
+@pytest.mark.parametrize("df", [1, 2, 3, 5, 9])
+@pytest.mark.parametrize("x", [0.1, 1.0, 2.5, 7.0, 15.0, 40.0])
+def test_chi2_sf_matches_scipy(x: float, df: int) -> None:
+    from dataquorum.evals.stats import chi2_sf
+
+    assert chi2_sf(x, df) == pytest.approx(sps.chi2.sf(x, df), rel=1e-9, abs=1e-14)
+
+
+def test_friedman_matches_scipy_with_and_without_ties() -> None:
+    from dataquorum.evals.stats import friedman
+
+    rng = np.random.default_rng(0)
+    scores = rng.random((8, 3)).round(1)  # rounding creates ties
+    result = friedman(["a", "b", "c"], scores.tolist(), [True] * 8)
+    ref = sps.friedmanchisquare(*(-scores).T)  # scipy ranks ascending, so negate
+    assert result.statistic == pytest.approx(ref.statistic)
+    assert result.p_value == pytest.approx(ref.pvalue)
+    assert sum(result.average_ranks) == pytest.approx(6.0)  # 1 + 2 + 3
+
+
+def test_friedman_respects_metric_direction() -> None:
+    from dataquorum.evals.stats import friedman
+
+    # a is best everywhere: highest AUC on task 1, lowest RMSE on task 2.
+    result = friedman(["a", "b", "c"], [[0.9, 0.8, 0.7], [1.0, 2.0, 3.0]], [True, False])
+    assert result.average_ranks == [1.0, 2.0, 3.0]
+    assert result.critical_difference == pytest.approx(2.343 * math.sqrt(12 / 12))

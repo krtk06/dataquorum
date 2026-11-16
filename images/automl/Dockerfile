@@ -1,5 +1,5 @@
 # H2O + FLAML runtime for the week-10 AutoML benchmark (AutoGluon uses images/autogluon).
-# CPU only, runs offline. Not built yet:
+# CPU only, runs offline. Build:
 #   docker build -t dataquorum/automl:0.1 images/automl
 
 FROM python:3.12-slim@sha256:5e2bdb1b0d542d5039cffb8181c65930093949194a65c365dfb1b0fe13a4fa5b

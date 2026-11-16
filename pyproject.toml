@@ -98,10 +98,13 @@ known-third-party = ["docker"]
 "tests/test_loader.py" = ["E501"]
 "tests/test_findings.py" = ["E501"]
 "tests/test_features.py" = ["E501"]
+"tests/test_automl_bench.py" = ["E501"]
 "src/dataquorum/agents/features.py" = ["E501"]
 "src/dataquorum/evals/checkers_ml.py" = ["E501"]
+"src/dataquorum/ml/automl/benchmark.py" = ["E501"]
 "tests/sandbox/test_docker_executor.py" = ["E501"]
 
 [[tool.mypy.overrides]]
-module = ["openml", "openml.*", "statsmodels", "statsmodels.*", "scipy", "scipy.*"]
+module = ["openml", "openml.*", "statsmodels", "statsmodels.*", "scipy", "scipy.*",
+          "flaml", "flaml.*", "h2o", "h2o.*", "autogluon", "autogluon.*", "sklearn", "sklearn.*"]
 ignore_missing_imports = true

@@ -109,8 +109,9 @@ Container settings:
 - `mem_limit` 1 GB (configurable), `nano_cpus` 1 CPU, `pids_limit` 64
 - non-root user, `cap_drop=["ALL"]`, `security_opt=["no-new-privileges"]`
 - wall-clock timeout (default 60 s); container killed and removed on timeout
-- image pinned by digest, built from `sandbox/image/` with pandas, numpy, scikit-learn,
-  plotly, pyarrow only
+- image `dataquorum/sandbox:0.1` built from `docker/sandbox/` (base pinned by digest):
+  pandas 2.3.3, numpy 2.5.5, pyarrow 26.0.1, plotly 7.1.0 only (~700 MB; full set in
+  `requirements.lock`). scikit-learn is added when the feature-engineering agent needs it.
 
 Protocol: host writes `input.parquet` and `code.py` (defines one function with a fixed
 name); the runner inside calls it and writes `output.parquet` (or `output.json` for
@@ -150,8 +151,15 @@ request is passed verbatim in its own section, reviewer notes in another),
 fix attempts see the previous code and the crash or failed blocking checks.
 Checkpoint types are registered with LangGraph's msgpack allowlist. A
 `BudgetExceededError` is not caught, so an eval batch stops instead of logging failures.
-Week 3 handles DataFrame-to-DataFrame agents; figure outputs arrive with the
-visualization agent in week 4.
+Output kinds (week 4): `AgentSpec.output_kind` is `"dataframe"` (generated
+`transform(df) -> DataFrame`, stored as Parquet) or `"figure"` (generated
+`make_figure(df) -> plotly Figure`, stored as Plotly JSON in `FigureOutput`). The kind picks
+the code rules in the prompt and the default generic checks (S4: figure checks are
+`figure_has_traces` and `traces_have_points`, blocking, and `figure_has_title`, warning).
+Agents: `agents/cleaning.py`, `agents/wrangling.py` (shape changes expected, so row-loss and
+column-drop warnings are off; must raise on missing columns rather than invent them),
+`agents/visualization.py`. `agents.make_engine(spec)` wires Go, the budget guard, Docker and
+the recorder.
 
 ## S7. Supervisor (`supervisor/`)
 
@@ -183,6 +191,12 @@ One DuckDB row per run: run id, parent run id (for supervisor runs), timestamp U
 model id, status, retries, tokens (prompt / completion / reasoning / cached), cost, wall time,
 check results (JSON), error, git commit, eval task id (if any). LLM calls get a child table.
 The budget guard (S3) and the studio Runs page read from this database.
+
+Implemented (week 4): `RunRecorder` writes table `runs` (one row per `AgentResult`, replaced
+if the same run id is recorded again; includes `failed_checks`, output kind and reference,
+and the final code) and `llm_spend` (`spent_at`, model, allowance; one row per LLM call via
+`DuckDBLedger`, which replaces the JSONL ledger). The engine records every finished run when
+given a recorder. File: `runs/dataquorum.duckdb` (git-ignored); one writer process at a time.
 
 ## S9. Engineering rules
 

@@ -21,6 +21,7 @@ caught: an eval run should stop, not record a failure per task.
 
 from __future__ import annotations
 
+import json
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
@@ -39,7 +40,7 @@ from dataquorum.core.agent_spec import AgentSpec
 from dataquorum.core.cost import Usage
 from dataquorum.core.llm import LLMError, Message, ReasoningEffort, StructuredResult
 from dataquorum.core.review import Approve, Reject, Revise, parse_review
-from dataquorum.core.state import AgentResult, DataFrameOutput
+from dataquorum.core.state import AgentResult, DataFrameOutput, FigureOutput
 from dataquorum.core.statuses import CheckResult, Severity
 from dataquorum.core.validation import CheckContext, run_checks
 from dataquorum.sandbox.executor import Executor
@@ -171,24 +172,33 @@ class Nodes:
         if s.code is None:
             return {}
         workdir = Path(s.workdir) / f"attempt_{s.attempts}"
-        run = self.executor.run(s.code, Path(s.input_path), workdir)
+        kind = self.spec.output_kind
+        run = self.executor.run(s.code, Path(s.input_path), workdir, kind)
         usage = s.usage.model_copy(update={"seconds": s.usage.seconds + run.seconds})
         output = str(run.output_path) if run.output_path else None
         return {"error": run.error, "output_path": output, "usage": usage}
 
+    def _load_output(self, path: str) -> Any:
+        if self.spec.output_kind == "figure":
+            return json.loads(Path(path).read_text(encoding="utf-8"))
+        return pd.read_parquet(path)
+
     def validate(self, s: EngineState) -> dict[str, Any]:
         if s.output_path is None:
             return {"checks": []}
-        before, after = pd.read_parquet(s.input_path), pd.read_parquet(s.output_path)
+        before, after = pd.read_parquet(s.input_path), self._load_output(s.output_path)
         checks = run_checks(self.spec.checks, before, after, CheckContext(request=s.request))
         return {"checks": checks}
 
     def finalize(self, s: EngineState) -> dict[str, Any]:
         rejected = s.review_kind == "reject"
-        output = None
+        output: DataFrameOutput | FigureOutput | None = None
         if s.output_path and not rejected:
-            frame = pd.read_parquet(s.output_path)
-            output = DataFrameOutput.save(frame, Path(s.workdir) / "result.parquet")
+            loaded = self._load_output(s.output_path)
+            if self.spec.output_kind == "figure":
+                output = FigureOutput(figure=loaded)
+            else:
+                output = DataFrameOutput.save(loaded, Path(s.workdir) / "result.parquet")
         error = f"Rejected by reviewer: {s.rejected_reason}" if rejected else s.error
         retries = s.usage.retries + max(s.attempts - 1, 0)
         result = AgentResult.from_run(
@@ -274,6 +284,12 @@ class EngineRun:
         return self.review is not None
 
 
+class ResultSink(Protocol):
+    """Where finished results go (tracing.recorder.RunRecorder in real use)."""
+
+    def record(self, result: AgentResult) -> None: ...
+
+
 class Engine:
     def __init__(
         self,
@@ -284,10 +300,12 @@ class Engine:
         runs_dir: Path = Path("runs/engine"),
         checkpointer: BaseCheckpointSaver[Any] | None = None,
         max_retries: int = 3,
+        recorder: ResultSink | None = None,
     ) -> None:
         self.spec = spec
         self.runs_dir = runs_dir
         self.max_retries = max_retries
+        self.recorder = recorder
         saver = checkpointer or InMemorySaver(serde=checkpoint_serializer())
         self.app = build_graph(spec, llm, executor).compile(checkpointer=saver)
 
@@ -327,4 +345,6 @@ class Engine:
         if out.get("__interrupt__"):
             return EngineRun(run_id=run_id, review=out["__interrupt__"][0].value)
         result: AgentResult = out["result"]
+        if self.recorder is not None:
+            self.recorder.record(result)
         return EngineRun(run_id=run_id, result=result)

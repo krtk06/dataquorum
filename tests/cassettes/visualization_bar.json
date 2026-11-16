@@ -1,0 +1,176 @@
+[
+  {
+    "request": {
+      "method": "POST",
+      "url": "https://opencode.ai/inference/go/openai/v1/chat/completions",
+      "body": {
+        "model": "deepseek-v4.1-flash",
+        "messages": [
+          {
+            "role": "system",
+            "content": "You are a data-visualization agent that builds clear Plotly charts.\n\nRecommend how to chart what the user asked for: the chart type and\nwhy, which columns go on which axis or encoding, any aggregation or sorting needed first,\nand the title and axis labels. Use only columns that exist in the data summary. Prefer\nsimple chart types (bar, line, scatter, histogram, box) unless the user asks otherwise.\n\nReturn a short ordered list of concrete steps. Each step should be one action a pandas function can perform. Do not include code."
+          },
+          {
+            "role": "user",
+            "content": "User request (verbatim):\nBar chart of total revenue by region.\n\nData summary:\nShape: 8 rows x 4 columns\nColumns:\n- order_id: dtype=int64, missing_or_placeholder=0\n- region: dtype=object, missing_or_placeholder=0, distinct=4\n- revenue: dtype=float64, missing_or_placeholder=0\n- units: dtype=int64, missing_or_placeholder=0\nFirst 8 rows: [{'order_id': 1, 'region': 'North', 'revenue': 120.0, 'units': 3}, {'order_id': 2, 'region': 'South', 'revenue': 80.5, 'units': 2}, {'order_id': 3, 'region': 'North', 'revenue': 99.9, 'units': 2}, {'order_id': 4, 'region': 'East', 'revenue': 45.0, 'units': 1}, {'order_id': 5, 'region': 'South', 'revenue': 60.0, 'units': 2}, {'order_id': 6, 'region': 'East', 'revenue': 30.25, 'units': 1}, {'order_id': 7, 'region': 'North', 'revenue': 75.0, 'units': 3}, {'order_id': 8, 'region': 'West', 'revenue': 52.0, 'units': 1}]"
+          }
+        ],
+        "reasoning_effort": "low",
+        "response_format": {
+          "type": "json_schema",
+          "json_schema": {
+            "name": "RecommendedSteps",
+            "schema": {
+              "properties": {
+                "steps": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "title": "Steps",
+                  "type": "array"
+                }
+              },
+              "required": [
+                "steps"
+              ],
+              "title": "RecommendedSteps",
+              "type": "object",
+              "additionalProperties": false
+            },
+            "strict": true
+          }
+        }
+      }
+    },
+    "response": {
+      "status": 200,
+      "body": {
+        "id": "gw-2a5a3e22439a-77f92c",
+        "object": "chat.completion",
+        "created": 1794813128,
+        "model": "deepseek-v4.1-flash",
+        "choices": [
+          {
+            "index": 0,
+            "finish_reason": "stop",
+            "message": {
+              "role": "assistant",
+              "content": "{\"steps\": [\n  \"Select only the needed columns: region and revenue.\",\n  \"Group the data by region and sum revenue to get total revenue per region (aggregation is required because regions repeat across orders).\",\n  \"Reset the index so the grouped result becomes a two-column table with region and total revenue.\",\n  \"Sort the aggregated rows by total revenue in descending order so the tallest bar appears first.\",\n  \"Render a vertical bar chart with region on the x-axis and total revenue on the y-axis, using one bar per region.\",\n  \"Title the chart 'Total Revenue by Region' and label the axes 'Region' and 'Total Revenue'.\",\n  \"Optionally annotate each bar with its total revenue value for readability.\"\n]}",
+              "reasoning_content": "The user wants a bar chart of total revenue by region. Need aggregation (sum) by region, then bar chart. Provide ordered steps."
+            }
+          }
+        ],
+        "usage": {
+          "prompt_tokens": 465,
+          "completion_tokens": 181,
+          "total_tokens": 646,
+          "prompt_tokens_details": {
+            "cached_tokens": 0
+          },
+          "completion_tokens_details": {
+            "reasoning_tokens": 28
+          },
+          "cost": 0,
+          "opencode": {
+            "billing_source": "go",
+            "list_cost": 0.0003567,
+            "allowance": 0.00021402,
+            "tokens": {
+              "input": 465,
+              "output": 181,
+              "reasoning": 28,
+              "cache_read": 0,
+              "cache_write_5m": 0,
+              "cache_write_1h": 0
+            }
+          }
+        }
+      }
+    }
+  },
+  {
+    "request": {
+      "method": "POST",
+      "url": "https://opencode.ai/inference/go/openai/v1/chat/completions",
+      "body": {
+        "model": "deepseek-v4.1-flash",
+        "messages": [
+          {
+            "role": "system",
+            "content": "You are a data-visualization agent that builds clear Plotly charts.\n\nCode rules:\n- Define exactly one public function: `make_figure(df: pd.DataFrame)` that\n  returns a `plotly.graph_objects.Figure` (plotly.express is fine).\n- Import only pandas, numpy and plotly.\n- Give the figure a title and readable axis titles.\n- Put imports at the top of the code.\n- Do not read or write files, use the network, print, call input() or fig.show().\n- Do not modify `df` in place; work on a copy.\n- The code runs in a sandbox with no network and a time limit.\n\nUse plotly.express where possible. Aggregate in pandas before plotting\nwhen the chart shows totals or averages. Set a descriptive title and axis titles with units\nwhen known. Do not call fig.show() or write files."
+          },
+          {
+            "role": "user",
+            "content": "User request (verbatim):\nBar chart of total revenue by region.\n\nData summary:\nShape: 8 rows x 4 columns\nColumns:\n- order_id: dtype=int64, missing_or_placeholder=0\n- region: dtype=object, missing_or_placeholder=0, distinct=4\n- revenue: dtype=float64, missing_or_placeholder=0\n- units: dtype=int64, missing_or_placeholder=0\nFirst 8 rows: [{'order_id': 1, 'region': 'North', 'revenue': 120.0, 'units': 3}, {'order_id': 2, 'region': 'South', 'revenue': 80.5, 'units': 2}, {'order_id': 3, 'region': 'North', 'revenue': 99.9, 'units': 2}, {'order_id': 4, 'region': 'East', 'revenue': 45.0, 'units': 1}, {'order_id': 5, 'region': 'South', 'revenue': 60.0, 'units': 2}, {'order_id': 6, 'region': 'East', 'revenue': 30.25, 'units': 1}, {'order_id': 7, 'region': 'North', 'revenue': 75.0, 'units': 3}, {'order_id': 8, 'region': 'West', 'revenue': 52.0, 'units': 1}]\n\nSteps to implement:\n1. Select only the needed columns: region and revenue.\n2. Group the data by region and sum revenue to get total revenue per region (aggregation is required because regions repeat across orders).\n3. Reset the index so the grouped result becomes a two-column table with region and total revenue.\n4. Sort the aggregated rows by total revenue in descending order so the tallest bar appears first.\n5. Render a vertical bar chart with region on the x-axis and total revenue on the y-axis, using one bar per region.\n6. Title the chart 'Total Revenue by Region' and label the axes 'Region' and 'Total Revenue'.\n7. Optionally annotate each bar with its total revenue value for readability."
+          }
+        ],
+        "reasoning_effort": "low",
+        "response_format": {
+          "type": "json_schema",
+          "json_schema": {
+            "name": "GeneratedCode",
+            "schema": {
+              "properties": {
+                "python_code": {
+                  "title": "Python Code",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "python_code"
+              ],
+              "title": "GeneratedCode",
+              "type": "object",
+              "additionalProperties": false
+            },
+            "strict": true
+          }
+        }
+      }
+    },
+    "response": {
+      "status": 200,
+      "body": {
+        "id": "gw-2abd6f0cdecb-6f1167",
+        "object": "chat.completion",
+        "created": 1794813132,
+        "model": "deepseek-v4.1-flash",
+        "choices": [
+          {
+            "index": 0,
+            "finish_reason": "stop",
+            "message": {
+              "role": "assistant",
+              "content": "{\"python_code\": \"import pandas as pd\\nimport numpy as np\\nimport plotly.express as px\\n\\n\\ndef make_figure(df: pd.DataFrame):\\n    data = df.copy()\\n    grouped = (\\n        data[['region', 'revenue']]\\n        .groupby('region', as_index=False)['revenue']\\n        .sum()\\n        .rename(columns={'revenue': 'total_revenue'})\\n        .sort_values('total_revenue', ascending=False)\\n    )\\n\\n    fig = px.bar(\\n        grouped,\\n        x='region',\\n        y='total_revenue',\\n        text='total_revenue',\\n        title='Total Revenue by Region',\\n        labels={'region': 'Region', 'total_revenue': 'Total Revenue'},\\n    )\\n\\n    fig.update_traces(texttemplate='%{text:.2f}', textposition='outside')\\n    fig.update_layout(\\n        xaxis_title='Region',\\n        yaxis_title='Total Revenue',\\n        yaxis=dict(rangemode='tozero'),\\n        margin=dict(t=60),\\n    )\\n\\n    return fig\\n\"}"
+            }
+          }
+        ],
+        "usage": {
+          "prompt_tokens": 685,
+          "completion_tokens": 273,
+          "total_tokens": 958,
+          "prompt_tokens_details": {
+            "cached_tokens": 0
+          },
+          "completion_tokens_details": {
+            "reasoning_tokens": 0
+          },
+          "cost": 0,
+          "opencode": {
+            "billing_source": "go",
+            "list_cost": 0.0005331,
+            "allowance": 0.00031986,
+            "tokens": {
+              "input": 685,
+              "output": 273,
+              "reasoning": 0,
+              "cache_read": 0,
+              "cache_write_5m": 0,
+              "cache_write_1h": 0
+            }
+          }
+        }
+      }
+    }
+  }
+]

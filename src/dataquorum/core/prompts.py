@@ -15,14 +15,26 @@ import pandas as pd
 from dataquorum.core.agent_spec import AgentSpec
 from dataquorum.core.llm import Message
 from dataquorum.core.validation import missing_like
-from dataquorum.sandbox.executor import FUNCTION_NAME
+from dataquorum.sandbox.executor import FUNCTION_NAMES, OutputKind
 
-_SHARED_CODE_RULES = f"""Code rules:
-- Define exactly one public function: `{FUNCTION_NAME}(df: pd.DataFrame) -> pd.DataFrame`.
-- Import only pandas and numpy. Put imports at the top of the code.
-- Do not read or write files, use the network, print, or call input().
-- Do not modify `df` in place; work on a copy and return a new DataFrame.
+_COMMON_RULES = """- Put imports at the top of the code.
+- Do not read or write files, use the network, print, call input() or fig.show().
+- Do not modify `df` in place; work on a copy.
 - The code runs in a sandbox with no network and a time limit."""
+
+_CODE_RULES: dict[OutputKind, str] = {
+    "dataframe": f"""Code rules:
+- Define exactly one public function:
+  `{FUNCTION_NAMES["dataframe"]}(df: pd.DataFrame) -> pd.DataFrame`.
+- Import only pandas and numpy.
+{_COMMON_RULES}""",
+    "figure": f"""Code rules:
+- Define exactly one public function: `{FUNCTION_NAMES["figure"]}(df: pd.DataFrame)` that
+  returns a `plotly.graph_objects.Figure` (plotly.express is fine).
+- Import only pandas, numpy and plotly.
+- Give the figure a title and readable axis titles.
+{_COMMON_RULES}""",
+}
 
 
 def summarize_frame(df: pd.DataFrame, max_rows: int = 8) -> str:
@@ -70,7 +82,7 @@ def code_messages(
     previous_code: str | None = None,
     problem: str | None = None,
 ) -> list[Message]:
-    system = f"{spec.role}\n\n{_SHARED_CODE_RULES}\n\n{spec.code_guidance}"
+    system = f"{spec.role}\n\n{_CODE_RULES[spec.output_kind]}\n\n{spec.code_guidance}"
     numbered = "\n".join(f"{i}. {s}" for i, s in enumerate(steps, 1))
     user = _context(request, data_summary, review_notes) + f"\n\nSteps to implement:\n{numbered}"
     if previous_code is not None and problem:

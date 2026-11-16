@@ -13,9 +13,12 @@ a check can never turn into a silent pass.
 
 from __future__ import annotations
 
+import base64
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+from typing import Any
 
+import numpy as np
 import pandas as pd
 
 from dataquorum.core.statuses import CheckResult, Severity
@@ -31,7 +34,8 @@ class CheckContext:
         return any(w.lower() in text for w in words)
 
 
-CheckFn = Callable[[pd.DataFrame, pd.DataFrame, CheckContext], CheckResult]
+# `after` is a DataFrame for table agents and a Plotly figure dict for figure agents.
+CheckFn = Callable[[pd.DataFrame, Any, CheckContext], CheckResult]
 
 
 @dataclass(frozen=True)
@@ -42,7 +46,7 @@ class Check:
 
 
 def run_checks(
-    checks: Sequence[Check], before: pd.DataFrame, after: pd.DataFrame, context: CheckContext
+    checks: Sequence[Check], before: pd.DataFrame, after: Any, context: CheckContext
 ) -> list[CheckResult]:
     results = []
     for check in checks:
@@ -146,4 +150,47 @@ GENERIC_DATAFRAME_CHECKS: tuple[Check, ...] = (
     Check("columns_dropped", Severity.WARNING, columns_dropped),
     Check("missing_values_increased", Severity.WARNING, missing_values_increased),
     Check("numeric_became_text", Severity.WARNING, numeric_became_text),
+)
+
+
+# ------------------------------------------------------------------ figure checks
+_POINT_FIELDS = ("x", "y", "z", "values", "labels", "r", "theta", "lat", "lon", "locations")
+
+
+def point_count(values: Any) -> int:
+    """Length of a Plotly data array: a list, or Plotly 6+'s base64 typed array."""
+    if isinstance(values, list | tuple):
+        return len(values)
+    if isinstance(values, dict) and "bdata" in values and "dtype" in values:
+        raw = base64.b64decode(values["bdata"])
+        return len(raw) // np.dtype(values["dtype"]).itemsize
+    return 0
+
+
+def figure_has_traces(before: pd.DataFrame, fig: dict[str, Any], ctx: CheckContext) -> CheckResult:
+    traces = fig.get("data") or []
+    return _result(len(traces) > 0, f"{len(traces)} traces")
+
+
+def traces_have_points(before: pd.DataFrame, fig: dict[str, Any], ctx: CheckContext) -> CheckResult:
+    counts = [
+        max((point_count(t.get(k)) for k in _POINT_FIELDS), default=0)
+        for t in fig.get("data") or []
+    ]
+    empty = [i for i, n in enumerate(counts) if n == 0]
+    if not counts or empty:
+        return _result(False, f"traces with no data points: {empty or 'all'}")
+    return _result(True, f"points per trace: {counts}")
+
+
+def figure_has_title(before: pd.DataFrame, fig: dict[str, Any], ctx: CheckContext) -> CheckResult:
+    title = (fig.get("layout") or {}).get("title")
+    text = title.get("text") if isinstance(title, dict) else title
+    return _result(bool(text and str(text).strip()), f"title: {text!r}")
+
+
+GENERIC_FIGURE_CHECKS: tuple[Check, ...] = (
+    Check("figure_has_traces", Severity.BLOCKING, figure_has_traces),
+    Check("traces_have_points", Severity.BLOCKING, traces_have_points),
+    Check("figure_has_title", Severity.WARNING, figure_has_title),
 )

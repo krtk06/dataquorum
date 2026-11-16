@@ -15,7 +15,7 @@ from pydantic import BaseModel
 
 from dataquorum.core.cost import Usage
 from dataquorum.core.llm import LLMError, Message, StructuredResult
-from dataquorum.sandbox.executor import FUNCTION_NAME, ExecutionResult
+from dataquorum.sandbox.executor import FUNCTION_NAMES, OUTPUT_FILES, ExecutionResult, OutputKind
 
 CALL_USAGE = Usage(models=["fake-model"], calls=1, completion_tokens=100, allowance_usd=0.001)
 
@@ -48,17 +48,22 @@ def llm_failure() -> LLMError:
 
 
 class InProcessExecutor:
-    def run(self, code: str, input_path: Path, workdir: Path) -> ExecutionResult:
+    def run(
+        self, code: str, input_path: Path, workdir: Path, kind: OutputKind = "dataframe"
+    ) -> ExecutionResult:
         start = time.perf_counter()
         workdir.mkdir(parents=True, exist_ok=True)
+        path = workdir / OUTPUT_FILES[kind]
         try:
             namespace: dict[str, Any] = {}
             exec(code, namespace)
-            out = namespace[FUNCTION_NAME](pd.read_parquet(input_path))
-            if not isinstance(out, pd.DataFrame):
-                raise TypeError(f"returned {type(out).__name__}")
+            out = namespace[FUNCTION_NAMES[kind]](pd.read_parquet(input_path))
+            if kind == "dataframe":
+                if not isinstance(out, pd.DataFrame):
+                    raise TypeError(f"returned {type(out).__name__}")
+                out.to_parquet(path, index=False)
+            else:
+                path.write_text(out.to_json(), encoding="utf-8")
         except Exception as exc:
             return ExecutionResult(False, f"{type(exc).__name__}: {exc}", None, 0.0)
-        path = workdir / "output.parquet"
-        out.to_parquet(path, index=False)
         return ExecutionResult(True, None, path, time.perf_counter() - start)

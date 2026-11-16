@@ -1,0 +1,177 @@
+[
+  {
+    "request": {
+      "method": "POST",
+      "url": "https://opencode.ai/inference/go/openai/v1/chat/completions",
+      "body": {
+        "model": "deepseek-v4.1-flash",
+        "messages": [
+          {
+            "role": "system",
+            "content": "You are a data-wrangling agent that reshapes pandas DataFrames.\n\nRecommend the steps that turn the data into what the user asked\nfor: filtering, grouping and aggregating, pivoting or melting, sorting, deriving new\ncolumns, renaming. Use only columns that exist in the data summary. If the request needs a\ncolumn that does not exist, say so in the first step instead of inventing one.\n\nReturn a short ordered list of concrete steps. Each step should be one action a pandas function can perform. Do not include code."
+          },
+          {
+            "role": "user",
+            "content": "User request (verbatim):\nTotal revenue and total units per region, sorted by revenue, highest first.\n\nData summary:\nShape: 8 rows x 4 columns\nColumns:\n- order_id: dtype=int64, missing_or_placeholder=0\n- region: dtype=object, missing_or_placeholder=0, distinct=4\n- revenue: dtype=float64, missing_or_placeholder=0\n- units: dtype=int64, missing_or_placeholder=0\nFirst 8 rows: [{'order_id': 1, 'region': 'North', 'revenue': 120.0, 'units': 3}, {'order_id': 2, 'region': 'South', 'revenue': 80.5, 'units': 2}, {'order_id': 3, 'region': 'North', 'revenue': 99.9, 'units': 2}, {'order_id': 4, 'region': 'East', 'revenue': 45.0, 'units': 1}, {'order_id': 5, 'region': 'South', 'revenue': 60.0, 'units': 2}, {'order_id': 6, 'region': 'East', 'revenue': 30.25, 'units': 1}, {'order_id': 7, 'region': 'North', 'revenue': 75.0, 'units': 3}, {'order_id': 8, 'region': 'West', 'revenue': 52.0, 'units': 1}]"
+          }
+        ],
+        "reasoning_effort": "low",
+        "response_format": {
+          "type": "json_schema",
+          "json_schema": {
+            "name": "RecommendedSteps",
+            "schema": {
+              "properties": {
+                "steps": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "title": "Steps",
+                  "type": "array"
+                }
+              },
+              "required": [
+                "steps"
+              ],
+              "title": "RecommendedSteps",
+              "type": "object",
+              "additionalProperties": false
+            },
+            "strict": true
+          }
+        }
+      }
+    },
+    "response": {
+      "status": 200,
+      "body": {
+        "id": "gw-2bc4e6b84a45-67c1b4",
+        "object": "chat.completion",
+        "created": 1794813080,
+        "model": "deepseek-v4.1-flash",
+        "choices": [
+          {
+            "index": 0,
+            "finish_reason": "stop",
+            "message": {
+              "role": "assistant",
+              "content": "{\"steps\": [\"Group the DataFrame by 'region'.\", \"Aggregate 'revenue' with sum and 'units' with sum to get total revenue and total units per region.\", \"Reset the index so 'region' becomes a regular column.\", \"Sort the result by total revenue in descending order.\"]}",
+              "reasoning_content": "Simple steps."
+            }
+          }
+        ],
+        "usage": {
+          "prompt_tokens": 471,
+          "completion_tokens": 67,
+          "total_tokens": 538,
+          "prompt_tokens_details": {
+            "cached_tokens": 0
+          },
+          "completion_tokens_details": {
+            "reasoning_tokens": 3
+          },
+          "cost": 0,
+          "opencode": {
+            "billing_source": "go",
+            "list_cost": 0.0002217,
+            "allowance": 0.00013302,
+            "tokens": {
+              "input": 471,
+              "output": 67,
+              "reasoning": 3,
+              "cache_read": 0,
+              "cache_write_5m": 0,
+              "cache_write_1h": 0
+            }
+          }
+        }
+      }
+    }
+  },
+  {
+    "request": {
+      "method": "POST",
+      "url": "https://opencode.ai/inference/go/openai/v1/chat/completions",
+      "body": {
+        "model": "deepseek-v4.1-flash",
+        "messages": [
+          {
+            "role": "system",
+            "content": "You are a data-wrangling agent that reshapes pandas DataFrames.\n\nCode rules:\n- Define exactly one public function:\n  `transform(df: pd.DataFrame) -> pd.DataFrame`.\n- Import only pandas and numpy.\n- Put imports at the top of the code.\n- Do not read or write files, use the network, print, call input() or fig.show().\n- Do not modify `df` in place; work on a copy.\n- The code runs in a sandbox with no network and a time limit.\n\nUse only columns that exist in `df`. If a required column is missing,\nraise a ValueError that names it; never create placeholder columns or return an empty frame\nto hide the problem. After groupby, call reset_index() so groups are columns. Give derived\ncolumns clear snake_case names."
+          },
+          {
+            "role": "user",
+            "content": "User request (verbatim):\nTotal revenue and total units per region, sorted by revenue, highest first.\n\nData summary:\nShape: 8 rows x 4 columns\nColumns:\n- order_id: dtype=int64, missing_or_placeholder=0\n- region: dtype=object, missing_or_placeholder=0, distinct=4\n- revenue: dtype=float64, missing_or_placeholder=0\n- units: dtype=int64, missing_or_placeholder=0\nFirst 8 rows: [{'order_id': 1, 'region': 'North', 'revenue': 120.0, 'units': 3}, {'order_id': 2, 'region': 'South', 'revenue': 80.5, 'units': 2}, {'order_id': 3, 'region': 'North', 'revenue': 99.9, 'units': 2}, {'order_id': 4, 'region': 'East', 'revenue': 45.0, 'units': 1}, {'order_id': 5, 'region': 'South', 'revenue': 60.0, 'units': 2}, {'order_id': 6, 'region': 'East', 'revenue': 30.25, 'units': 1}, {'order_id': 7, 'region': 'North', 'revenue': 75.0, 'units': 3}, {'order_id': 8, 'region': 'West', 'revenue': 52.0, 'units': 1}]\n\nSteps to implement:\n1. Group the DataFrame by 'region'.\n2. Aggregate 'revenue' with sum and 'units' with sum to get total revenue and total units per region.\n3. Reset the index so 'region' becomes a regular column.\n4. Sort the result by total revenue in descending order."
+          }
+        ],
+        "reasoning_effort": "low",
+        "response_format": {
+          "type": "json_schema",
+          "json_schema": {
+            "name": "GeneratedCode",
+            "schema": {
+              "properties": {
+                "python_code": {
+                  "title": "Python Code",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "python_code"
+              ],
+              "title": "GeneratedCode",
+              "type": "object",
+              "additionalProperties": false
+            },
+            "strict": true
+          }
+        }
+      }
+    },
+    "response": {
+      "status": 200,
+      "body": {
+        "id": "gw-2abd6f0cdecb-6eff03",
+        "object": "chat.completion",
+        "created": 1794813082,
+        "model": "deepseek-v4.1-flash",
+        "choices": [
+          {
+            "index": 0,
+            "finish_reason": "stop",
+            "message": {
+              "role": "assistant",
+              "content": "{\n  \"python_code\": \"import pandas as pd\\nimport numpy as np\\n\\n\\ndef transform(df: pd.DataFrame) -> pd.DataFrame:\\n    required = ['region', 'revenue', 'units']\\n    for col in required:\\n        if col not in df.columns:\\n            raise ValueError(f\\\"Missing required column: {col}\\\")\\n\\n    out = df.copy()\\n\\n    result = (\\n        out.groupby('region', as_index=False)\\n        .agg(total_revenue=('revenue', 'sum'), total_units=('units', 'sum'))\\n        .reset_index(drop=True)\\n    )\\n\\n    result = result.sort_values('total_revenue', ascending=False).reset_index(drop=True)\\n\\n    return result\\n\"\n}",
+              "reasoning_content": "Group by region, sum revenue and units. Need column names: total_revenue, total_units. Sort by total_revenue descending.\n\nCareful: after groupby sum, columns are 'revenue' and 'units'. Rename to total_revenue, total_units.\n\nAlso validate columns exist."
+            }
+          }
+        ],
+        "usage": {
+          "prompt_tokens": 591,
+          "completion_tokens": 236,
+          "total_tokens": 827,
+          "prompt_tokens_details": {
+            "cached_tokens": 0
+          },
+          "completion_tokens_details": {
+            "reasoning_tokens": 62
+          },
+          "cost": 0,
+          "opencode": {
+            "billing_source": "go",
+            "list_cost": 0.0004605,
+            "allowance": 0.0002763,
+            "tokens": {
+              "input": 591,
+              "output": 236,
+              "reasoning": 62,
+              "cache_read": 0,
+              "cache_write_5m": 0,
+              "cache_write_1h": 0
+            }
+          }
+        }
+      }
+    }
+  }
+]

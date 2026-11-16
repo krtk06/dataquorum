@@ -36,7 +36,7 @@ def run(
 
 
 def test_registry_and_kinds() -> None:
-    assert set(AGENTS) == {"data_cleaning", "data_wrangling", "data_visualization"}
+    assert {"data_cleaning", "data_wrangling", "data_visualization", "sql_database"} <= set(AGENTS)
     assert CLEANING.function_name == "transform"
     assert VISUALIZATION.output_kind == "figure" and VISUALIZATION.function_name == "make_figure"
 

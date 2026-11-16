@@ -46,6 +46,36 @@ GitHub; **weeks 1–10 are done; week 11 is next.**
 Still open from earlier: week-14 ablation runs (`--no-checks`, `--no-recommend`); the PyPI
 upload (the **user** does it: `uv build`, then `uv publish` with their own token).
 
+## Working with the user
+
+- **Suggest the next step, then wait for a go-ahead.** The rhythm has been: finish a week,
+  summarise it, propose the next week; the user replies "Yes, start week N". Don't start
+  the next week, or a large new piece of work, on your own.
+- **Ask before anything that spends money or takes long:** live LLM eval runs, re-recording
+  replay cassettes, long benchmarks. Say the expected cost and time first (past runs cost
+  well under $0.05 each; the week-10 benchmark took ~1 h). Unit tests and lint need no ask.
+- **Manual steps for the user come as numbered, step-by-step instructions** (exact menu
+  paths, exact commands, which shell). Steps like installs, settings, the PyPI upload.
+- **Explain LangGraph, agent and stats ideas plainly:** the user is new to them and learning
+  as the project goes. Short, concrete explanations beat jargon.
+- **Respect the RAM limit.** The user pushed back on raising the WSL cap. Prefer approaches
+  that fit 4 GB, and say up front if something needs more.
+- Report results honestly, including failures and your own bugs (see the results docs for
+  the tone: what went wrong, why, what changed).
+
+## Local vs cloud
+
+Everything here assumes **Codex running locally on the user's PC** in this folder. A Codex
+**cloud** task gets only the git repo. It has none of these:
+- the Docker images;
+- the `.env` API key;
+- the `.original/` clone;
+- the `runs/` and `data/` caches.
+
+In the cloud, Docker tests skip silently, evals and benchmarks can't run, and OpenML data
+must be downloaded again. So don't claim anything is "verified" from a cloud task unless it
+actually ran there; use it only for code and unit-test work.
+
 ## Hard rules
 
 - **No AI attribution in git:** never add `Co-Authored-By` trailers for an AI, or

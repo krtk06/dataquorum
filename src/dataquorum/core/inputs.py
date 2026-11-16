@@ -68,7 +68,8 @@ def describe_folder(folder: Path, max_files: int = 30, preview_lines: int = 5) -
 
 def describe_database(path: Path, sample_rows: int = 3) -> str:
     """Tables, columns with types, row counts and a few rows, via a read-only connection."""
-    lines = [f"Database {path.name}:"]
+    dialect = "DuckDB" if path.suffix.lower() == ".duckdb" else "SQLite"
+    lines = [f"Database {path.name} (dialect: {dialect}):"]
     if path.suffix.lower() == ".duckdb":
         con = duckdb.connect(str(path), read_only=True)
         try:

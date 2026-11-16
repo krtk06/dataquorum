@@ -12,6 +12,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from dataquorum.agents.cleaning import CLEANING
+from dataquorum.agents.sql import SQL
 from dataquorum.agents.visualization import VISUALIZATION
 from dataquorum.agents.wrangling import WRANGLING
 from dataquorum.core.agent_spec import AgentSpec
@@ -19,7 +20,9 @@ from dataquorum.core.budget import BudgetGuard, Mode
 from dataquorum.core.engine import Engine, ResultSink, StructuredLLM
 from dataquorum.sandbox.executor import Executor
 
-AGENTS: dict[str, AgentSpec] = {spec.name: spec for spec in (CLEANING, WRANGLING, VISUALIZATION)}
+AGENTS: dict[str, AgentSpec] = {
+    spec.name: spec for spec in (CLEANING, WRANGLING, VISUALIZATION, SQL)
+}
 
 
 def make_engine(
@@ -46,7 +49,11 @@ def make_engine(
         if isinstance(recorder, RunRecorder):
             budget = BudgetGuard(DuckDBLedger(recorder), mode=budget_mode)
         llm = LLMClient(LLMConfig.from_env(), budget=budget)
-    if executor is None:
+    if executor is None and spec.language == "sql":
+        from dataquorum.sandbox.sql_executor import SqlExecutor
+
+        executor = SqlExecutor()
+    elif executor is None:
         from dataquorum.sandbox.docker_executor import DockerExecutor
 
         executor = DockerExecutor()
@@ -55,4 +62,4 @@ def make_engine(
     )
 
 
-__all__ = ["AGENTS", "CLEANING", "VISUALIZATION", "WRANGLING", "make_engine"]
+__all__ = ["AGENTS", "CLEANING", "SQL", "VISUALIZATION", "WRANGLING", "make_engine"]

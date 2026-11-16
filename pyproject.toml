@@ -31,6 +31,10 @@ build-backend = "uv_build"
 line-length = 100
 target-version = "py312"
 
+[tool.ruff.format]
+# Code blocks in docs are sketches (aligned comments, placeholders), not runnable code.
+exclude = ["*.md"]
+
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF"]
 

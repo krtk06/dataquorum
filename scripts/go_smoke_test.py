@@ -79,7 +79,16 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--model", default=os.getenv("DQ_MODEL", DEFAULT_MODEL))
     parser.add_argument("--base-url", default=os.getenv("DQ_BASE_URL", DEFAULT_BASE_URL))
+    parser.add_argument(
+        "--reasoning-effort",
+        choices=["minimal", "low", "medium", "high"],
+        help="Pass reasoning_effort to the API (model support varies).",
+    )
+    parser.add_argument("--brief", action="store_true", help="Omit response text and raw usage.")
     args = parser.parse_args()
+    extra: dict[str, Any] = (
+        {"reasoning_effort": args.reasoning_effort} if args.reasoning_effort else {}
+    )
 
     load_dotenv()
     api_key = os.getenv("OPENCODE_GO_API_KEY")
@@ -107,6 +116,7 @@ def main() -> int:
             args.model,
             "plain",
             messages=[{"role": "user", "content": "Reply with exactly: pong"}],
+            **extra,
         ),
         run_call(
             client,
@@ -124,6 +134,7 @@ def main() -> int:
                     "strict": True,
                 },
             },
+            **extra,
         ),
     ]
 
@@ -139,7 +150,23 @@ def main() -> int:
         structured["schema_valid"] = False
         structured["schema_error"] = str(exc)[:300]
 
-    print(json.dumps({"utc": now.isoformat(), "peak": peak, "calls": results}, indent=2))
+    for r in results:
+        # Go reports what the call counted against the plan limit (allowance) and list price.
+        go = (r["usage"].get("opencode") or {}) if r["usage"] else {}
+        r["go_list_cost_usd"] = go.get("list_cost")
+        r["go_allowance_usd"] = go.get("allowance")
+        if args.brief:
+            r["prompt_tokens"] = r["usage"].get("prompt_tokens")
+            r["completion_tokens"] = r["usage"].get("completion_tokens")
+            del r["usage"], r["content"]
+
+    report = {
+        "utc": now.isoformat(),
+        "peak": peak,
+        "reasoning_effort": args.reasoning_effort,
+        "calls": results,
+    }
+    print(json.dumps(report, indent=2))
     return 0 if structured["schema_valid"] else 1
 
 

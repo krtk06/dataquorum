@@ -1,0 +1,96 @@
+[
+  {
+    "request": {
+      "method": "POST",
+      "url": "https://opencode.ai/inference/go/openai/v1/chat/completions",
+      "body": {
+        "model": "deepseek-v4.1-flash",
+        "messages": [
+          {
+            "role": "system",
+            "content": "You are a data-cleaning agent. Return cleaning steps and one Python function `clean(df: pd.DataFrame) -> pd.DataFrame` that implements them."
+          },
+          {
+            "role": "user",
+            "content": "Columns: age (float, some NaN), income (strings like '$1,200' and 'n/a'), city (mixed case, stray spaces)."
+          }
+        ],
+        "reasoning_effort": "low",
+        "response_format": {
+          "type": "json_schema",
+          "json_schema": {
+            "name": "CleaningPlan",
+            "schema": {
+              "properties": {
+                "steps": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "title": "Steps",
+                  "type": "array"
+                },
+                "python_code": {
+                  "title": "Python Code",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "steps",
+                "python_code"
+              ],
+              "title": "CleaningPlan",
+              "type": "object",
+              "additionalProperties": false
+            },
+            "strict": true
+          }
+        }
+      }
+    },
+    "response": {
+      "status": 200,
+      "body": {
+        "id": "gw-2a5a3e22439a-72537c",
+        "object": "chat.completion",
+        "created": 1794809350,
+        "model": "deepseek-v4.1-flash",
+        "choices": [
+          {
+            "index": 0,
+            "finish_reason": "stop",
+            "message": {
+              "role": "assistant",
+              "content": "{ \"steps\": [ \"age: coerce to numeric with errors='coerce' (preserves NaN), leave missing values as NaN rather than imputing.\", \"income: strip whitespace, treat 'n/a', 'N/A', 'na', '-', '' as missing, remove '$' and ',', then coerce to float.\", \"city: strip leading/trailing whitespace, collapse internal whitespace, convert empty strings to NaN, then apply title case for consistent casing.\", \"Only operate on columns that exist to keep the function safe on partial frames.\" ], \"python_code\": \"import pandas as pd\\nimport numpy as np\\nimport re\\n\\ndef clean(df: pd.DataFrame) -> pd.DataFrame:\\n    df = df.copy()\\n\\n    # --- age: ensure numeric, NaN preserved ---\\n    if 'age' in df.columns:\\n        df['age'] = pd.to_numeric(df['age'], errors='coerce').astype('float64')\\n\\n    # --- income: '$1,200' / 'n/a' -> float ---\\n    if 'income' in df.columns:\\n        s = df['income'].astype('string').str.strip()\\n        s = s.str.replace(r'^\\\\$', '', regex=True)\\n        s = s.str.replace(',', '', regex=False)\\n        s = s.str.replace(r'(?i)^\\\\s*(n/?a|none|null|-)?\\\\s*$', np.nan, regex=True)\\n        df['income'] = pd.to_numeric(s, errors='coerce')\\n\\n    # --- city: strip, collapse whitespace, standardize case ---\\n    if 'city' in df.columns:\\n        s = df['city'].astype('string')\\n        s = s.str.replace(r'\\\\s+', ' ', regex=True).str.strip()\\n        s = s.replace('', np.nan)\\n        s = s.str.title()\\n        df['city'] = s\\n\\n    return df\" }",
+              "reasoning_content": "The user wants cleaning steps and a Python function to clean a DataFrame with:\n- age: float, some NaN\n- income: strings like '$1,200' and 'n/a'\n- city: mixed case, stray spaces\n\nLet me write cleaning steps and the function.\n\nSteps:\n1. age: keep numeric, optionally fill NaN? Better to leave as NaN but coerce to numeric. Could fill with median but let's just ensure numeric dtype. Maybe flag missing.\n2. income: remove '$' and ',', replace 'n/a' with NaN, convert to float. Handle other weird values like 'N/A', '', '-'.\n3. city: strip whitespace, title-case, collapse internal whitespace, maybe replace empty strings with NaN.\n\nWrite function that operates column-wise and is defensive (only applies if column exists).\n\nReturn function."
+            }
+          }
+        ],
+        "usage": {
+          "prompt_tokens": 91,
+          "completion_tokens": 613,
+          "total_tokens": 704,
+          "prompt_tokens_details": {
+            "cached_tokens": 0
+          },
+          "completion_tokens_details": {
+            "reasoning_tokens": 172
+          },
+          "cost": 0,
+          "opencode": {
+            "billing_source": "go",
+            "list_cost": 0.0007629,
+            "allowance": 0.00045774,
+            "tokens": {
+              "input": 91,
+              "output": 613,
+              "reasoning": 172,
+              "cache_read": 0,
+              "cache_write_5m": 0,
+              "cache_write_1h": 0
+            }
+          }
+        }
+      }
+    }
+  }
+]

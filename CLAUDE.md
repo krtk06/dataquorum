@@ -33,7 +33,7 @@
 - **API keys only in environment variables or `.env`** (git-ignored). Never in code.
 
 ## Stack
-Python 3.12 · **uv** + `pyproject.toml` + lock file · ruff · mypy · pytest · `pytest-recording` (replay recorded LLM calls in CI) · GitHub Actions
+Python 3.12 · **uv** + `pyproject.toml` + lock file · ruff · mypy · pytest · recorded LLM calls replayed in CI via our own `tests/replay.py` (the `openai` SDK now uses `httpx2`, which vcrpy/`pytest-recording` cannot intercept; dropped 2026-11-16) · GitHub Actions
 - **Agents:** `langgraph`, `langchain-openai` (base_url pointed at Go), `pydantic`
 - **Data:** `pandas` (pin 2.x; CI also tests pandas 3), `duckdb`, `sqlalchemy`, `sqlglot` (enforces read-only SQL), `plotly`
 - **Sandbox:** Docker via the `docker` Python SDK, running under WSL2
@@ -103,4 +103,6 @@ tests/
 - **Original project** is cloned to `.original/ai-data-science-team` (git-ignored) with its own venv `.original/venv` (pandas<3 via `.original/constraints.txt`, plus `ipython`, which it imports but does not declare).
 
 ## Status
-**Week 1 in progress.** GitHub repo: https://github.com/krtk06/dataquorum (public). Done: uv skeleton (`src/dataquorum/…`, Python 3.12, ruff, mypy strict, pytest), CI (Ubuntu + Windows, plus a pandas-3 job), MIT license, README with credit, Go smoke test (run 2026-11-16, see Open items), `docs/spec.md` (S1–S10), `docs/original-bug-log.md`, Docker sandbox flags verified. Original run against Go and AutoGluon image built (both 2026-11-16). Left in week 1: PyPI upload (user), LLM basics + LangGraph reading (user).
+**Week 2 started 2026-11-16: `core/llm.py` done** (with `core/cost.py`, `core/budget.py`). Structured output only (json_schema strict → json_object fallback → one repair → `StructuredOutputError`), fallback model on 5xx/429/connection errors, Go `allowance` used for cost, budget guard (eval raises / interactive warns) with a JSONL ledger in `runs/spend.jsonl` until the week-4 DuckDB recorder. Default `reasoning_effort` is still the provider default until the week-2 experiment. Next: reasoning-effort experiment, then `core/state.py`.
+
+**Week 1 (done except the user's PyPI upload).** GitHub repo: https://github.com/krtk06/dataquorum (public). Done: uv skeleton (`src/dataquorum/…`, Python 3.12, ruff, mypy strict, pytest), CI (Ubuntu + Windows, plus a pandas-3 job), MIT license, README with credit, Go smoke test (run 2026-11-16, see Open items), `docs/spec.md` (S1–S10), `docs/original-bug-log.md`, Docker sandbox flags verified. Original run against Go and AutoGluon image built (both 2026-11-16). Left in week 1: PyPI upload (user), LLM basics + LangGraph reading (user).

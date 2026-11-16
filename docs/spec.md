@@ -169,8 +169,9 @@ The budget guard (S3) and the studio Runs page read from this database.
 - No file over about 400 lines; CI fails on any `.py` file over 450.
 - Python 3.12, uv lock file committed, ruff + mypy strict + pytest in CI on Ubuntu and
   Windows, plus a pandas 3 job.
-- LLM calls in tests are replayed from cassettes (`pytest-recording`); CI never calls a live
-  API.
+- LLM calls in tests are replayed from JSON cassettes through an `httpx2` transport
+  (`tests/replay.py`); cassettes never store request headers. CI never calls a live API.
+  Re-record with `DQ_RECORD=1 uv run pytest <test file>`.
 - API keys only from environment variables or `.env`.
 - Every bug in `docs/original-bug-log.md` gets a test that fails on the original's behaviour.
 

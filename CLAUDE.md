@@ -20,7 +20,7 @@
 - **Routing bugs:** the router merges appended instructions into the question and discards refusals.
 
 ## Constraints
-- **Windows 11**, 16 GB RAM, **no GPU**. Only small local models (3–4B through Ollama), used for offline smoke tests.
+- **Windows 11**, 16 GB RAM, **no GPU**. No local models: Ollama was dropped on 2026-11-16 (Go calls cost ~$0.001–0.003 each, CI replays recorded calls, and 3–4B CPU models are too weak at structured output to be useful tests).
 - **~15 hrs/week.** The user is new to LangGraph and agents but learns fast.
 - **Main LLM:** **DeepSeek V4.1 Flash** (`deepseek-v4.1-flash`) through the user's **OpenCode Go** subscription.
   - OpenAI-compatible endpoint: `https://opencode.ai/inference/go/openai/v1/chat/completions` (check against the docs)
@@ -34,7 +34,7 @@
 
 ## Stack
 Python 3.12 · **uv** + `pyproject.toml` + lock file · ruff · mypy · pytest · `pytest-recording` (replay recorded LLM calls in CI) · GitHub Actions
-- **Agents:** `langgraph`, `langchain-openai` (base_url pointed at Go), `langchain-ollama`, `pydantic`
+- **Agents:** `langgraph`, `langchain-openai` (base_url pointed at Go), `pydantic`
 - **Data:** `pandas` (pin 2.x; CI also tests pandas 3), `duckdb`, `sqlalchemy`, `sqlglot` (enforces read-only SQL), `plotly`
 - **Sandbox:** Docker via the `docker` Python SDK, running under WSL2
 - **ML:** scikit-learn, xgboost, `h2o` (needs Java 17+), `flaml`, `autogluon.tabular` (run in WSL2/Docker), `optuna`, `shap`, `mlflow`, `fastapi`, `evidently`
@@ -65,7 +65,7 @@ tests/
 ## Roadmap (17 weeks, plus 1 buffer week)
 | Wk | Work |
 |---|---|
-| 1 | Setup (uv, CI, WSL2 + Docker, Java, Ollama, AutoGluon Docker image) · Go smoke test + **measure real tokens per call** · install the original in a **separate venv**, point it at Go/DeepSeek, log its bugs · write the spec · LLM basics + structured output |
+| 1 | Setup (uv, CI, WSL2 + Docker, Java, AutoGluon Docker image) · Go smoke test + **measure real tokens per call** · install the original in a **separate venv**, point it at Go/DeepSeek, log its bugs · write the spec · LLM basics + structured output |
 | 2 | LangGraph learning · throwaway mini agent (write code → run → retry) · `core/llm.py`, `core/state.py` |
 | 3 | Core engine + validation framework + human-review interrupt + replay tests |
 | 4 | Cleaning, Wrangling, Visualization agents + run recorder |
@@ -88,7 +88,8 @@ tests/
 - **PyPI placeholder:** `dist/dataquorum-0.0.1` is built (`uv build`); the user uploads it with `uv publish` and their own PyPI token. Name was still free on 2026-11-16.
 - **Go docs (checked 2026-11-16):** endpoint and model IDs (`deepseek-v4.1-flash`, `glm-5.3-flash`) match. Go docs say DeepSeek V4.1 Flash is **restricted by default** and needs Settings > Privacy > Regions > **Global** (default is Europe & US). **Decided 2026-11-16: enable Global** so DeepSeek V4.1 Flash is usable; keep the other default privacy settings (the block on models that train on prompts stays on). Recheck DeepSeek's zero-retention terms monthly. Auth header is not documented; assumed `Authorization: Bearer` (OpenAI-compatible).
 - **Week 1 checks:** does DeepSeek emit reasoning tokens (affects cost)? `scripts/go_smoke_test.py` answers this. Does the original tool work against Go's endpoint (needed for the parity test)?
-- **Not installed yet:** Docker (WSL2 3.0.5 is present), Java 17+, Ollama.
+- **Not installed yet:** Docker (WSL2 3.0.5 is present). Java: OpenJDK 21 installed 2026-11-16.
+- **Original project** is cloned to `.original/ai-data-science-team` (git-ignored) with its own venv `.original/venv` (pandas<3 via `.original/constraints.txt`, plus `ipython`, which it imports but does not declare).
 
 ## Status
 **Week 1 in progress.** GitHub repo: https://github.com/krtk06/dataquorum (public). Done: uv skeleton (`src/dataquorum/…`, Python 3.12, ruff, mypy strict, pytest), CI (Ubuntu + Windows, plus a pandas-3 job), MIT license, README with credit, Go smoke-test script (not yet run against the API).

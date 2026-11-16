@@ -50,7 +50,7 @@ Rules:
 
 ## S3. LLM layer (`core/llm.py`)
 
-- One provider interface over OpenAI-compatible endpoints (OpenCode Go) and Ollama.
+- One provider interface over OpenAI-compatible endpoints (OpenCode Go). No local models.
 - Config: base URL, model id, fallback model id, temperature, timeout, max tokens. Model ids
   are locked per eval run and recorded in every trace row.
 - Headers on every Go request: `User-Agent: dataquorum/<version>` and a stable

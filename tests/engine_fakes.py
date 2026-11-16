@@ -15,7 +15,13 @@ from pydantic import BaseModel
 
 from dataquorum.core.cost import Usage
 from dataquorum.core.llm import LLMError, Message, StructuredResult
-from dataquorum.sandbox.executor import FUNCTION_NAMES, OUTPUT_FILES, ExecutionResult, OutputKind
+from dataquorum.sandbox.executor import (
+    OUTPUT_FILES,
+    ExecutionResult,
+    InputKind,
+    OutputKind,
+    function_name,
+)
 
 CALL_USAGE = Usage(models=["fake-model"], calls=1, completion_tokens=100, allowance_usd=0.001)
 
@@ -49,7 +55,12 @@ def llm_failure() -> LLMError:
 
 class InProcessExecutor:
     def run(
-        self, code: str, input_path: Path, workdir: Path, kind: OutputKind = "dataframe"
+        self,
+        code: str,
+        input_path: Path,
+        workdir: Path,
+        kind: OutputKind = "dataframe",
+        input_kind: InputKind = "dataframe",
     ) -> ExecutionResult:
         start = time.perf_counter()
         workdir.mkdir(parents=True, exist_ok=True)
@@ -57,7 +68,12 @@ class InProcessExecutor:
         try:
             namespace: dict[str, Any] = {}
             exec(code, namespace)
-            out = namespace[FUNCTION_NAMES[kind]](pd.read_parquet(input_path))
+            func = namespace[function_name(input_kind, kind)]
+            out = (
+                func(str(input_path))
+                if input_kind == "files"
+                else func(pd.read_parquet(input_path))
+            )
             if kind == "dataframe":
                 if not isinstance(out, pd.DataFrame):
                     raise TypeError(f"returned {type(out).__name__}")

@@ -35,7 +35,7 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.types import Command, interrupt
 from pydantic import BaseModel, Field
 
-from dataquorum.core import prompts
+from dataquorum.core import inputs, prompts
 from dataquorum.core.agent_spec import AgentSpec
 from dataquorum.core.cost import Usage
 from dataquorum.core.llm import LLMError, Message, ReasoningEffort, StructuredResult
@@ -43,7 +43,7 @@ from dataquorum.core.review import Approve, Reject, Revise, parse_review
 from dataquorum.core.state import AgentResult, DataFrameOutput, FigureOutput
 from dataquorum.core.statuses import CheckResult, Severity
 from dataquorum.core.validation import CheckContext, run_checks
-from dataquorum.sandbox.executor import Executor
+from dataquorum.sandbox.executor import Executor, InputKind
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -76,10 +76,15 @@ class GeneratedCode(BaseModel):
     python_code: str
 
 
+class GeneratedSQL(BaseModel):
+    sql: str
+
+
 class EngineState(BaseModel):
     run_id: str
     request: str  # verbatim, never edited
-    input_path: str
+    input_path: str  # Parquet file, folder, or database file (see core/inputs.py)
+    input_kind: InputKind = "dataframe"
     workdir: str
     max_retries: int = 3
     human_review: bool = False
@@ -108,7 +113,7 @@ class Nodes:
         self.spec, self.llm, self.executor = spec, llm, executor
 
     def summarize(self, s: EngineState) -> dict[str, Any]:
-        return {"data_summary": prompts.summarize_frame(pd.read_parquet(s.input_path))}
+        return {"data_summary": inputs.describe(s.input_kind, Path(s.input_path))}
 
     def recommend(self, s: EngineState) -> dict[str, Any]:
         messages = prompts.recommend_messages(self.spec, s.request, s.data_summary, s.review_notes)
@@ -161,9 +166,10 @@ class Nodes:
         )
         attempts = s.attempts + 1
         try:
-            out = self.llm.structured(
-                messages, GeneratedCode, reasoning_effort=self.spec.reasoning_effort
+            schema: type[GeneratedCode] | type[GeneratedSQL] = (
+                GeneratedSQL if self.spec.language == "sql" else GeneratedCode
             )
+            out = self.llm.structured(messages, schema, reasoning_effort=self.spec.reasoning_effort)
         except LLMError as exc:
             return {
                 "attempts": attempts,
@@ -175,7 +181,7 @@ class Nodes:
             }
         return {
             "attempts": attempts,
-            "code": out.value.python_code,
+            "code": out.value.sql if isinstance(out.value, GeneratedSQL) else out.value.python_code,
             "error": None,
             "checks": [],
             "output_path": None,
@@ -187,7 +193,7 @@ class Nodes:
             return {}
         workdir = Path(s.workdir) / f"attempt_{s.attempts}"
         kind = self.spec.output_kind
-        run = self.executor.run(s.code, Path(s.input_path), workdir, kind)
+        run = self.executor.run(s.code, Path(s.input_path), workdir, kind, s.input_kind)
         exec_seconds = s.usage.execution_seconds + run.seconds
         usage = s.usage.model_copy(update={"execution_seconds": exec_seconds})
         output = str(run.output_path) if run.output_path else None
@@ -201,7 +207,8 @@ class Nodes:
     def validate(self, s: EngineState) -> dict[str, Any]:
         if s.output_path is None:
             return {"checks": []}
-        before, after = pd.read_parquet(s.input_path), self._load_output(s.output_path)
+        before = inputs.before_frame(s.input_kind, Path(s.input_path))
+        after = self._load_output(s.output_path)
         checks = run_checks(self.spec.checks, before, after, CheckContext(request=s.request))
         return {"checks": checks}
 
@@ -337,7 +344,7 @@ class Engine:
 
     def start(
         self,
-        data: pd.DataFrame,
+        data: pd.DataFrame | str | Path,
         request: str,
         *,
         human_review: bool = False,
@@ -346,12 +353,16 @@ class Engine:
         run_id = run_id or uuid.uuid4().hex
         workdir = self.runs_dir / run_id
         workdir.mkdir(parents=True, exist_ok=True)
-        input_path = workdir / "input.parquet"
-        data.to_parquet(input_path, index=False)
+        input_kind, input_path = inputs.prepare(data, workdir)
+        if input_kind != self.spec.input_kind:
+            raise ValueError(
+                f"{self.spec.name} reads {self.spec.input_kind} input, but got {input_kind}"
+            )
         state = EngineState(
             run_id=run_id,
             request=request,
             input_path=str(input_path),
+            input_kind=input_kind,
             workdir=str(workdir),
             max_retries=self.max_retries,
             human_review=human_review,

@@ -29,18 +29,24 @@ from docker.errors import DockerException, ImageNotFound, NotFound
 from docker.models.containers import Container
 from docker.types import LogConfig, Ulimit
 
-from dataquorum.sandbox.executor import FUNCTION_NAMES, OUTPUT_FILES, ExecutionResult, OutputKind
+from dataquorum.sandbox.executor import (
+    OUTPUT_FILES,
+    ExecutionResult,
+    InputKind,
+    OutputKind,
+    function_name,
+)
 
 LABEL = "dataquorum.sandbox"
 DONE = "__DQ_DONE__"
 USER = "10001:10001"
 
-# Runs inside the container: python runner.py <function name> <output path>
+# Runs inside the container: python runner.py <function> <output path> <dataframe|files>
 RUNNER = """
 import json, os, sys, traceback
 import pandas as pd
 
-func_name, out_path = sys.argv[1], sys.argv[2]
+func_name, out_path, mode = sys.argv[1], sys.argv[2], sys.argv[3]
 meta = {"ok": False, "error": None}
 try:
     namespace = {}
@@ -48,8 +54,10 @@ try:
         exec(f.read(), namespace)
     if func_name not in namespace:
         raise NameError(f"The code does not define {func_name}(df).")
-    df = pd.read_parquet("/io/in/input.parquet")
-    out = namespace[func_name](df.copy())
+    if mode == "files":
+        out = namespace[func_name]("/io/data")
+    else:
+        out = namespace[func_name](pd.read_parquet("/io/in/input.parquet").copy())
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
     if out_path.endswith(".parquet"):
         if not isinstance(out, pd.DataFrame):
@@ -104,24 +112,33 @@ class DockerExecutor:
         return self._client
 
     def run(
-        self, code: str, input_path: Path, workdir: Path, kind: OutputKind = "dataframe"
+        self,
+        code: str,
+        input_path: Path,
+        workdir: Path,
+        kind: OutputKind = "dataframe",
+        input_kind: InputKind = "dataframe",
     ) -> ExecutionResult:
         in_dir, out_dir = workdir / "in", workdir / "out"
         in_dir.mkdir(parents=True, exist_ok=True)
         out_dir.mkdir(parents=True, exist_ok=True)
         (in_dir / "code.py").write_text(code, encoding="utf-8")
         (in_dir / "runner.py").write_text(RUNNER, encoding="utf-8")
-        shutil.copy(input_path, in_dir / "input.parquet")
+        if input_kind == "dataframe":
+            shutil.copy(input_path, in_dir / "input.parquet")
+        elif input_kind != "files":
+            raise ValueError(f"DockerExecutor cannot run {input_kind} input")
 
         out_name = OUTPUT_FILES[kind]
         inner_path = f"/tmp/out/{out_name}"
         hold = int(self.timeout_seconds) + 30  # keep the container alive to read the output
         script = (
-            f"python /io/in/runner.py {FUNCTION_NAMES[kind]} {inner_path}; "
+            f"python /io/in/runner.py {function_name(input_kind, kind)} {inner_path} {input_kind}; "
             f"echo {DONE} $?; sleep {hold}"
         )
         start = time.perf_counter()
-        container = self._start(script, in_dir)
+        data_dir = input_path if input_kind == "files" else None
+        container = self._start(script, in_dir, data_dir)
         try:
             finished, exit_code = self._wait(container, start + self.timeout_seconds)
             elapsed = time.perf_counter() - start
@@ -144,7 +161,7 @@ class DockerExecutor:
             with contextlib.suppress(DockerException):
                 container.remove(force=True)
 
-    def _start(self, script: str, in_dir: Path) -> Container:
+    def _start(self, script: str, in_dir: Path, data_dir: Path | None = None) -> Container:
         tmpfs_opts = f"rw,nosuid,nodev,noexec,size={self.tmp_size_mb}m,mode=1777"
         kwargs: dict[str, Any] = {
             "detach": True,
@@ -152,7 +169,14 @@ class DockerExecutor:
             "ipc_mode": "none",
             "read_only": True,
             "tmpfs": {"/tmp": tmpfs_opts},
-            "volumes": {str(in_dir.resolve()): {"bind": "/io/in", "mode": "ro"}},
+            "volumes": {
+                str(in_dir.resolve()): {"bind": "/io/in", "mode": "ro"},
+                **(
+                    {str(data_dir.resolve()): {"bind": "/io/data", "mode": "ro"}}
+                    if data_dir
+                    else {}
+                ),
+            },
             "user": USER,
             "cap_drop": ["ALL"],
             "security_opt": ["no-new-privileges"],

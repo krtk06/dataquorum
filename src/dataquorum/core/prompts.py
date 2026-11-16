@@ -15,26 +15,51 @@ import pandas as pd
 from dataquorum.core.agent_spec import AgentSpec
 from dataquorum.core.llm import Message
 from dataquorum.core.validation import missing_like
-from dataquorum.sandbox.executor import FUNCTION_NAMES, OutputKind
+from dataquorum.sandbox.executor import FUNCTION_NAMES, LOAD_FUNCTION
 
-_COMMON_RULES = """- Put imports at the top of the code.
-- Do not read or write files, use the network, print, call input() or fig.show().
-- Do not modify `df` in place; work on a copy.
-- The code runs in a sandbox with no network and a time limit."""
+_SANDBOX = "- The code runs in a sandbox with no network and a time limit."
+_NO_SIDE_EFFECTS = "- Do not write files, use the network, print, call input() or fig.show()."
 
-_CODE_RULES: dict[OutputKind, str] = {
-    "dataframe": f"""Code rules:
+_DATAFRAME_RULES = f"""Code rules:
 - Define exactly one public function:
   `{FUNCTION_NAMES["dataframe"]}(df: pd.DataFrame) -> pd.DataFrame`.
-- Import only pandas and numpy.
-{_COMMON_RULES}""",
-    "figure": f"""Code rules:
+- Import only pandas and numpy (and scikit-learn if the agent guidance allows it).
+- Put imports at the top of the code. Do not read files.
+{_NO_SIDE_EFFECTS}
+- Do not modify `df` in place; work on a copy.
+{_SANDBOX}"""
+
+_FIGURE_RULES = f"""Code rules:
 - Define exactly one public function: `{FUNCTION_NAMES["figure"]}(df: pd.DataFrame)` that
   returns a `plotly.graph_objects.Figure` (plotly.express is fine).
-- Import only pandas, numpy and plotly.
+- Import only pandas, numpy and plotly. Put imports at the top. Do not read files.
 - Give the figure a title and readable axis titles.
-{_COMMON_RULES}""",
-}
+{_NO_SIDE_EFFECTS}
+- Do not modify `df` in place; work on a copy.
+{_SANDBOX}"""
+
+_LOAD_RULES = f"""Code rules:
+- Define exactly one public function: `{LOAD_FUNCTION}(data_dir: str) -> pd.DataFrame`.
+- Read files only from `data_dir` (read-only), using paths relative to it as listed in the
+  data summary. Use pandas readers (read_csv, read_excel, read_json, read_parquet).
+- Import only pandas, numpy, os, pathlib and glob. Never unpickle files.
+{_NO_SIDE_EFFECTS}
+{_SANDBOX}"""
+
+_SQL_RULES = """Query rules:
+- Return exactly one read-only query: a SELECT, optionally starting with WITH.
+- Never use INSERT, UPDATE, DELETE, CREATE, DROP, ALTER, ATTACH, PRAGMA, COPY or other
+  statements that change data or settings; they are rejected before running.
+- Use only the tables and columns listed in the schema. Quote names that need quoting.
+- Return the full query text only, without a trailing explanation."""
+
+
+def code_rules(spec: AgentSpec) -> str:
+    if spec.language == "sql":
+        return _SQL_RULES
+    if spec.input_kind == "files":
+        return _LOAD_RULES
+    return _FIGURE_RULES if spec.output_kind == "figure" else _DATAFRAME_RULES
 
 
 def summarize_frame(df: pd.DataFrame, max_rows: int = 8) -> str:
@@ -64,12 +89,12 @@ def recommend_messages(
 ) -> list[Message]:
     system = (
         f"{spec.role}\n\n{spec.recommend_guidance}\n\n"
-        "Return a short ordered list of concrete steps. Each step should be one action a "
-        "pandas function can perform. Do not include code.\n"
-        "If the request cannot be done with this data (for example it needs a column that "
-        "does not exist), set `blocker` to a short explanation of what is missing and return "
-        "no steps. Do not substitute other columns unless the user asked for that. "
-        "Otherwise set `blocker` to null."
+        "Return a short ordered list of concrete steps. Each step should be one concrete "
+        "action. Do not include code.\n"
+        "If the request cannot be done with this data (for example it needs a column, "
+        "table or file that does not exist), set `blocker` to a short explanation of what "
+        "is missing and return no steps. Do not substitute other data unless the user "
+        "asked for that. Otherwise set `blocker` to null."
     )
     return [
         {"role": "system", "content": system},
@@ -86,7 +111,7 @@ def code_messages(
     previous_code: str | None = None,
     problem: str | None = None,
 ) -> list[Message]:
-    system = f"{spec.role}\n\n{_CODE_RULES[spec.output_kind]}\n\n{spec.code_guidance}"
+    system = f"{spec.role}\n\n{code_rules(spec)}\n\n{spec.code_guidance}"
     numbered = "\n".join(f"{i}. {s}" for i, s in enumerate(steps, 1))
     plan = (
         f"Steps to implement:\n{numbered}"

@@ -13,6 +13,7 @@ from pathlib import Path
 
 from dataquorum.agents.cleaning import CLEANING
 from dataquorum.agents.eda import EDA
+from dataquorum.agents.features import FEATURES
 from dataquorum.agents.loader import LOADER
 from dataquorum.agents.sql import SQL
 from dataquorum.agents.visualization import VISUALIZATION
@@ -23,7 +24,7 @@ from dataquorum.core.engine import Engine, ResultSink, StructuredLLM
 from dataquorum.sandbox.executor import Executor
 
 AGENTS: dict[str, AgentSpec] = {
-    spec.name: spec for spec in (CLEANING, WRANGLING, VISUALIZATION, SQL, LOADER, EDA)
+    spec.name: spec for spec in (CLEANING, WRANGLING, VISUALIZATION, SQL, LOADER, EDA, FEATURES)
 }
 
 
@@ -68,6 +69,7 @@ __all__ = [
     "AGENTS",
     "CLEANING",
     "EDA",
+    "FEATURES",
     "LOADER",
     "SQL",
     "VISUALIZATION",

@@ -28,6 +28,19 @@ STATS: dict[str, Callable[[pd.Series], float]] = {
 }
 
 
+def base_name(column: object) -> str:
+    """Feature name without a scikit-learn ColumnTransformer prefix: `num__age` -> `age`."""
+    return str(column).split("__", 1)[-1]
+
+
+def find_column(out: pd.DataFrame, name: str) -> object | None:
+    """`name` itself, or the one prefixed scikit-learn output column for it (`num__age`)."""
+    if name in out.columns:
+        return name
+    matches = [c for c in out.columns if base_name(c) == name]
+    return matches[0] if len(matches) == 1 else None
+
+
 def per_column_stat(
     b: BuiltTask, output: Output, stat: str, columns: list[str], atol: float = 0.01
 ) -> CheckOutcome:
@@ -81,10 +94,11 @@ def column_unchanged(b: BuiltTask, output: Output, column: str) -> CheckOutcome:
     if isinstance(out, CheckOutcome):
         return out
     source = b.messy if isinstance(b.messy, pd.DataFrame) else b.clean
-    if column not in out.columns:
+    found = find_column(out, column)
+    if found is None:
         return CheckOutcome(name, False, "column missing")
     same = len(out) == len(source) and all(
-        _same(x, y, 0.0) for x, y in zip(out[column], source[column], strict=True)
+        _same(x, y, 0.0) for x, y in zip(out[found], source[column], strict=True)
     )
     return CheckOutcome(name, same, "unchanged" if same else "values changed")
 
@@ -96,15 +110,29 @@ def all_numeric(
     if isinstance(out, CheckOutcome):
         return out
     skip = set(except_columns or [])
-    text = [
-        str(c) for c in out.columns if c not in skip and not pd.api.types.is_numeric_dtype(out[c])
-    ]
-    gaps = [str(c) for c in out.columns if c not in skip and out[c].isna().any()]
+    keep = [c for c in out.columns if base_name(c) not in skip]
+    text = [str(c) for c in keep if not pd.api.types.is_numeric_dtype(out[c])]
+    gaps = [str(c) for c in keep if out[c].isna().any()]
     ok = not text and not gaps
     return CheckOutcome(
         "all_numeric",
         ok,
         "all numeric and complete" if ok else f"non-numeric {text}, missing {gaps}",
+    )
+
+
+def no_target_leakage(b: BuiltTask, output: Output, target: str) -> CheckOutcome:
+    """No feature may be derived from the target by name (`class_good`, `cat__class_good`)."""
+    out = _frame(output, "no_target_leakage")
+    if isinstance(out, CheckOutcome):
+        return out
+    leaked = [
+        str(c)
+        for c in out.columns
+        if base_name(c) != target and base_name(c).startswith(f"{target}_")
+    ]
+    return CheckOutcome(
+        "no_target_leakage", not leaked, f"target encoded into {leaked}" if leaked else "no leakage"
     )
 
 
@@ -122,7 +150,9 @@ def onehot(b: BuiltTask, output: Output, column: str) -> CheckOutcome:
         matches = [
             c
             for c in out.columns
-            if str(c) != column and str(c).endswith(category) and str(c).startswith(column)
+            if base_name(c) != column
+            and base_name(c).startswith(column)
+            and base_name(c).endswith(category)
         ]
         if not matches:
             problems.append(f"no column for {category!r}")
@@ -142,10 +172,11 @@ def _scaled(b: BuiltTask, output: Output, columns: list[str], kind: str) -> Chec
         return out
     problems = []
     for col in columns:
-        if col not in out.columns:
+        found = find_column(out, col)
+        if found is None:
             problems.append(f"{col} missing")
             continue
-        values = out[col].astype(float)
+        values = out[found].astype(float)
         if kind == "standardized":
             ok = abs(values.mean()) < 1e-6 and abs(values.std(ddof=0) - 1) < 0.01
             stat = f"mean {values.mean():.3g}, std {values.std(ddof=0):.3g}"
@@ -169,6 +200,7 @@ ML_CHECKERS: dict[str, Callable[..., CheckOutcome]] = {
     "per_column_stat": per_column_stat,
     "correlation": correlation,
     "column_unchanged": column_unchanged,
+    "no_target_leakage": no_target_leakage,
     "all_numeric": all_numeric,
     "onehot": onehot,
     "standardized": standardized,

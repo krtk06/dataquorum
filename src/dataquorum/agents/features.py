@@ -58,7 +58,8 @@ def target_not_encoded(before: pd.DataFrame, after: pd.DataFrame, ctx: CheckCont
     target = target_column(ctx.request, [str(c) for c in before.columns])
     if target is None:
         return _result(True, "no target named in the request")
-    leaked = [str(c) for c in after.columns if str(c) != target and str(c).startswith(f"{target}_")]
+    names = [str(c).split("__", 1)[-1] for c in after.columns]  # sklearn `cat__class_yes`
+    leaked = [n for n in names if n != target and n.startswith(f"{target}_")]
     return _result(
         not leaked, f"target encoded into features: {leaked}" if leaked else "no target leakage"
     )

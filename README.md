@@ -2,9 +2,11 @@
 
 **A team of AI data-science agents that must prove their work.**
 
-> Status: **v0.1.0** (week 8 of 17). Cleaning, wrangling and visualization agents work end to
-> end. Loader, SQL, EDA, feature-engineering and AutoML agents, a supervisor and the Studio
-> app are still to come.
+> Status: **v0.1.0 released; main is at week 9 of 17.** Seven agents work end to end: cleaning,
+> wrangling, visualization, loader (folders of files), SQL (read-only queries on SQLite or
+> DuckDB), EDA (with findings checked against the numbers) and feature engineering
+> (scikit-learn, with target-leakage checks). AutoML, a supervisor and the Studio app are
+> still to come.
 
 DataQuorum is a Python library of LLM agents for data-science work. An agent takes a pandas
 DataFrame and a request in plain English, writes code, runs it in a locked-down Docker
@@ -84,7 +86,7 @@ run = engine.resume(run.run_id, "Yes")      # or "Use the median instead", or "n
 
 ## Evals
 
-71 tasks on five OpenML datasets (adult, credit-g, telco-customer-churn, ames-housing,
+102 tasks on five OpenML datasets (adult, credit-g, telco-customer-churn, ames-housing,
 diabetes), each with a known answer produced by seeded fault injection. Checkers compare
 outputs by value; an oracle check proves every task is solvable and not trivial.
 
@@ -96,6 +98,7 @@ uv run python -m dataquorum.evals.compare runs/evals/<A> runs/evals/<B>
 
 Results so far: [week 6 baseline](docs/results/week6-baseline.md),
 [week 7 parity](docs/results/week7-parity.md), [week 8 hard tasks](docs/results/week8-hard-tasks.md),
+[week 9 new agents](docs/results/week9-new-agents.md),
 [reasoning-effort experiment](research/reasoning_effort/README.md).
 
 ## Project layout
@@ -103,7 +106,7 @@ Results so far: [week 6 baseline](docs/results/week6-baseline.md),
 ```
 src/dataquorum/
   core/      llm (structured output, cost, budget), engine (LangGraph), state, checks, review
-  agents/    cleaning, wrangling, visualization (each is an AgentSpec: prompts + checks)
+  agents/    cleaning, wrangling, visualization, loader, sql, eda, features (AgentSpecs)
   sandbox/   Docker executor
   tracing/   DuckDB run recorder
   evals/     datasets, faults, tasks (YAML), checkers, oracle, runner, stats, parity

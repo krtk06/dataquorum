@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased (week 9)
+
+- Loader agent (a folder of CSV/TSV/Excel/JSON/Parquet files, mounted read-only), SQL agent
+  (sqlglot guard plus read-only SQLite/DuckDB connections), EDA agent (findings whose numbers
+  must appear in the computed table) and feature-engineering agent (scikit-learn pipelines;
+  rows kept, target unchanged, no target leakage).
+- Engine inputs can be a DataFrame, a folder or a database file; code can be Python or SQL.
+- Sandbox image 0.2 adds openpyxl and scikit-learn.
+- 31 new eval tasks (102 total), checkers for statistics and features, and
+  `dataquorum.evals.rescore` to re-grade saved outputs after a checker fix.
+
 ## 0.1.0 (2026-11-16): first usable release
 
 ### Agents

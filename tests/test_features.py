@@ -128,3 +128,11 @@ def test_missing_values_encoded_as_a_category_is_flagged() -> None:
         }
     )
     assert failed(after) == ["missing_not_encoded"]
+
+
+def test_sklearn_prefixed_names_are_understood() -> None:
+    """ColumnTransformer names outputs `num__age`, `cat__class_yes`; checks must see through it."""
+    leaked = pd.DataFrame(
+        {"num__age": [0.1, 0.0, 1.2, -1.3], "cat__class_yes": [1.0, 0, 0, 1], "class": RAW["class"]}
+    )
+    assert failed(leaked) == ["target_not_encoded"]

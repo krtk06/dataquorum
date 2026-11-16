@@ -260,6 +260,7 @@ tasks:
     checks:
       - {kind: row_count}
       - {kind: column_unchanged, column: class}
+      - {kind: no_target_leakage, target: class}
       - {kind: onehot, column: sex}
       - {kind: onehot, column: race}
       - {kind: standardized, columns: [age, hours-per-week]}
@@ -275,6 +276,7 @@ tasks:
       median, then standardise credit_amount, duration and age, and one-hot encode housing.
     checks:
       - {kind: column_unchanged, column: class}
+      - {kind: no_target_leakage, target: class}
       - {kind: standardized, columns: [credit_amount, duration, age]}
       - {kind: onehot, column: housing}
       - {kind: all_numeric, except_columns: [class]}
@@ -289,6 +291,7 @@ tasks:
       PaymentMethod and standardise tenure and MonthlyCharges.
     checks:
       - {kind: column_unchanged, column: Churn}
+      - {kind: no_target_leakage, target: Churn}
       - {kind: onehot, column: Contract}
       - {kind: onehot, column: PaymentMethod}
       - {kind: standardized, columns: [tenure, MonthlyCharges]}
@@ -300,6 +303,7 @@ tasks:
     request: The target column is class. Standardise every other column.
     checks:
       - {kind: column_unchanged, column: class}
+      - {kind: no_target_leakage, target: class}
       - {kind: standardized, columns: [preg, plas, pres, skin, insu, mass, pedi, age]}
       - {kind: all_numeric, except_columns: [class]}
 
@@ -312,6 +316,7 @@ tasks:
       and Year_Built.
     checks:
       - {kind: column_unchanged, column: Sale_Price}
+      - {kind: no_target_leakage, target: Sale_Price}
       - {kind: onehot, column: Bldg_Type}
       - {kind: standardized, columns: [Gr_Liv_Area, Year_Built]}
       - {kind: all_numeric, except_columns: [Sale_Price]}
@@ -325,6 +330,7 @@ tasks:
       text column.
     checks:
       - {kind: column_unchanged, column: class}
+      - {kind: no_target_leakage, target: class}
       - {kind: onehot, column: purpose}
       - {kind: onehot, column: housing}
       - {kind: all_numeric, except_columns: [class]}
@@ -338,6 +344,7 @@ tasks:
       to 1 (min-max scaling).
     checks:
       - {kind: column_unchanged, column: class}
+      - {kind: no_target_leakage, target: class}
       - {kind: minmax, columns: [age, hours-per-week, education-num]}
       - {kind: all_numeric, except_columns: [class]}
 

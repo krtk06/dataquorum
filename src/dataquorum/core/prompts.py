@@ -23,7 +23,7 @@ _NO_SIDE_EFFECTS = "- Do not write files, use the network, print, call input() o
 _DATAFRAME_RULES = f"""Code rules:
 - Define exactly one public function:
   `{FUNCTION_NAMES["dataframe"]}(df: pd.DataFrame) -> pd.DataFrame`.
-- Import only pandas and numpy (and scikit-learn if the agent guidance allows it).
+- Import only pandas and numpy (and libraries explicitly permitted by the agent guidance).
 - Put imports at the top of the code. Do not read files.
 {_NO_SIDE_EFFECTS}
 - Do not modify `df` in place; work on a copy.

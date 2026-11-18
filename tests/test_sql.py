@@ -23,7 +23,7 @@ ORDERS = pd.DataFrame({"customer_id": [1, 1, 2, 3], "amount": [10.0, 5.0, 7.5, 2
 @pytest.fixture(params=["sqlite", "duckdb"])
 def db(request: pytest.FixtureRequest, tmp_path: Path) -> Path:
     if request.param == "sqlite":
-        path = tmp_path / "shop.db"
+        path = tmp_path / "shop #1.db"
         with sqlite3.connect(path) as lite:
             CUSTOMERS.to_sql("customers", lite, index=False)
             ORDERS.to_sql("orders", lite, index=False)

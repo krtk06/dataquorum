@@ -106,5 +106,5 @@ known-third-party = ["docker"]
 
 [[tool.mypy.overrides]]
 module = ["openml", "openml.*", "statsmodels", "statsmodels.*", "scipy", "scipy.*",
-          "flaml", "flaml.*", "h2o", "h2o.*", "autogluon", "autogluon.*", "sklearn", "sklearn.*"]
+          "optuna", "shap", "flaml", "flaml.*", "h2o", "h2o.*", "autogluon", "autogluon.*", "sklearn", "sklearn.*"]
 ignore_missing_imports = true

@@ -136,6 +136,9 @@ def test_broken_or_unknown_checker_fails() -> None:
         ("failed", "ok", False, "honest_failure"),
         ("failed", "ok", True, "false_failure"),
         ("failed", "failed", True, "correct"),
+        ("success", "needs_review", True, "false_success"),
+        ("needs_review", "success", True, "flagged"),
+        ("needs_review", "needs_review", True, "correct"),
         ("success", "failed", False, "false_success"),
     ],
 )
@@ -149,7 +152,7 @@ def test_task_files_are_consistent() -> None:
     assert len(all_tasks) >= 50
     for t in all_tasks:
         assert t.agent in AGENTS, t.id
-        assert t.dataset in datasets.DATASETS, t.id
+        assert t.dataset in {*datasets.DATASETS, "audit-fixture"}, t.id
         assert all(f.kind in FAULTS for f in t.faults), t.id
         assert all(c.kind in all_checkers() for c in t.checks), t.id
     assert sum(t.expect_status == "failed" for t in all_tasks) >= 3

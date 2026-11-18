@@ -132,3 +132,23 @@ tests/
 - **Earlier plan for week 9:** — Loader, SQL (sqlglot read-only), EDA, Feature Engineering agents + ~30 tasks. Still to run: ablations (`--no-checks`, `--no-recommend`) for week 14.
 
 **Week 1 (done except the user's PyPI upload).** GitHub repo: https://github.com/krtk06/dataquorum (public). Done: uv skeleton (`src/dataquorum/…`, Python 3.12, ruff, mypy strict, pytest), CI (Ubuntu + Windows, plus a pandas-3 job), MIT license, README with credit, Go smoke test (run 2026-11-16, see Open items), `docs/spec.md` (S1–S10), `docs/original-bug-log.md`, Docker sandbox flags verified. Original run against Go and AutoGluon image built (both 2026-11-16). Left in week 1: PyPI upload (user), LLM basics + LangGraph reading (user).
+
+**Week 11 implemented 2026-11-18** ([results](docs/results/week11-correctness.md), spec S12).
+The correctness agent proposes the audit in the sandbox. The host recomputes it against the
+requested column roles. A risk sets `needs_review`; disagreement triggers a retry. Explicit
+problem type avoids guessing whether integer targets denote classes or measured quantities.
+Training labels determine metric and proxy checks. Grouped forward folds keep equal times
+together and remove evaluation groups from training. Sandbox 0.3 adds Optuna and SHAP;
+`ml.report.forest_report` produces tuning, explanation and binary calibration tables.
+The forest uses finite numeric predictors. The CPU and WSL limits stayed in place.
+
+- Live: 12/12 correct (7 review, 5 success), zero false successes, $0.01337 allowance.
+  One retry corrected the model treating a categorical target proxy as a group ID.
+  Offline rescoring checked exact statuses and all saved report rows.
+- Testing caught duplicate index labels breaking the proxy calculation. The audit now uses
+  positional alignment. The host sandbox's temporary path also exposed an existing SQLite
+  bug with `#` in filenames. Read-only connections now use encoded file URIs.
+- Local verification: 320 non-Docker tests, 39 Docker tests and 114 offline reference
+  answers passed. Ruff formatting, lint and strict mypy passed.
+- Next is week 12, subject to user go-ahead: MLflow registry, FastAPI serving and Evidently
+  drift reporting.

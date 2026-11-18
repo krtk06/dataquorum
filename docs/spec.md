@@ -117,10 +117,10 @@ Container settings (week 5, docker SDK):
   carry the label `dataquorum.sandbox` so leftovers are easy to find
 - generated-code failures return `ExecutionResult(ok=False)`; Docker down or image missing
   raise `SandboxUnavailableError` (the engine must not burn LLM retries on those)
-- image `dataquorum/sandbox:0.2` built from `images/sandbox/` (base pinned by digest):
-  pandas 2.3.3, numpy 2.5.5, pyarrow 26.0.1, plotly 7.1.0, openpyxl 3.1.5 (Excel, loader
-  agent) and scikit-learn 1.9.1 (feature-engineering agent) only (~960 MB; full set in
-  `requirements.lock`). Version 0.1 (week 4) had no openpyxl or scikit-learn.
+- image `dataquorum/sandbox:0.3` installs the Linux pins in
+  `images/sandbox/requirements.lock`. The build context includes the sandbox lock and the
+  ML helper modules. Build at the repository root with
+  `docker build -t dataquorum/sandbox:0.3 -f images/sandbox/Dockerfile .`.
 - folder inputs (loader agent) are mounted read-only at `/io/data`.
 
 Protocol: host writes `input.parquet`, `code.py` and `runner.py` to the input mount. The
@@ -294,3 +294,30 @@ Implemented (week 6), all in `src/dataquorum/evals/`:
 - Known asymmetries: AutoGluon 1.6 has no fit-level seed (the seed only changes the split);
   H2O's `max_runtime_secs` excludes JVM start-up and prediction; AutoGluon's
   `medium_quality` preset may stop before the budget.
+
+## S12. ML correctness and model diagnostics (week 11)
+
+- Run `make_engine(CORRECTNESS)` with a named target (for example, “target is churn”)
+  and either “classification” or “regression”. Optional clauses use “group is”, “time is”
+  and “split is”. Quote names containing spaces. The lower-level `ml.correctness.audit`
+  accepts the same roles as keyword arguments.
+- Output has three columns, `kind`, `subject` and `value`. The host recomputes the
+  expected rows from the original frame. Missing, extra, changed or repeated rows fail a
+  blocking check. Verified risk rows trigger a warning and a final status of `needs_review`.
+- Training labels drive proxy checks and metric selection. Predictors are screened for exact
+  and near-perfect target relationships, ID-like names with near-unique values, and
+  post-outcome naming patterns. Split labels are exactly `train` and `test`. Compare all
+  non-target, non-split columns for repeated records. Check declared or inferred groups for
+  overlap and require the latest training time to precede the earliest test time.
+- Use stratified folds for ordinary classification and shuffled folds for ordinary regression.
+  With a repeated ID, hold out groups. With timestamps, validate forward in time. With both,
+  group equal timestamps, hold out later blocks, and remove their groups from training.
+  Explicit role names resolve ambiguity. Balanced accuracy applies when the smallest class
+  is below 10% of training rows. Otherwise use accuracy for classification and RMSE for regression.
+- `ml.report.forest_report` runs in Docker. The seeded Optuna study uses one worker and up
+  to three folds to choose depth and minimum leaf size for a 32-tree random forest. Supply
+  finite numeric predictors. The study checks its time budget between trials and the outer
+  executor applies a wall-clock limit. Tuning returns the selected cross-validation score.
+  SHAP ranks mean absolute contributions over up to 128 held-out rows, averaging across
+  classes for classification. Binary calibration returns the reliability table, Brier
+  score, count-weighted expected calibration error and the positive label.

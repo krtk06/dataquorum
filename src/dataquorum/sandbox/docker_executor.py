@@ -83,7 +83,7 @@ class SandboxUnavailableError(RuntimeError):
 class DockerExecutor:
     def __init__(
         self,
-        image: str = "dataquorum/sandbox:0.2",
+        image: str = "dataquorum/sandbox:0.3",
         *,
         timeout_seconds: float = 60,
         memory: str = "1g",
@@ -199,7 +199,7 @@ class DockerExecutor:
         except ImageNotFound as exc:
             raise SandboxUnavailableError(
                 f"Sandbox image {self.image} not found. Build it with: "
-                f"docker build -t {self.image} images/sandbox"
+                f"docker build -t {self.image} -f images/sandbox/Dockerfile ."
             ) from exc
         except DockerException as exc:
             raise SandboxUnavailableError(f"Could not start the sandbox: {exc}") from exc

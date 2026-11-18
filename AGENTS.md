@@ -13,35 +13,33 @@ no code copied). It is a Python library of LLM agents that write pandas/SQL/skle
 run it in a locked-down Docker sandbox, validate the result and report an honest
 `success` / `failed` / `needs_review`. A 17-week portfolio project (ML + data science depth)
 with ~15 h/week. Repo: https://github.com/krtk06/dataquorum (public). v0.1.0 is released on
-GitHub; **weeks 1–10 are done; week 11 is next.**
+GitHub; **weeks 1–11 are implemented; week 12 is next.**
 
-## Where things stand (2026-11-16)
+## Where things stand (2026-11-18)
 
-- Agents: cleaning, wrangling, visualization, loader, SQL, EDA, feature engineering
+- Agents: cleaning, wrangling, visualization, loader, SQL, EDA, feature engineering, ML correctness
   (`src/dataquorum/agents/`), all run by one LangGraph engine (`core/engine.py`).
-- Evals: 102 tasks, live score 102/102 with 0 false successes; parity vs the original
+- Evals: 114 tasks. The first 102 and the 12 week 11 tasks passed in their respective live runs,
+  with 0 false successes. Parity vs the original
   (47/55 with 7 false successes, McNemar p = 0.0078). Results in `docs/results/`.
-- Week 10 (just finished): `ml/automl/` runs FLAML, H2O and AutoGluon behind one
+- Week 10: `ml/automl/` runs FLAML, H2O and AutoGluon behind one
   `fit_predict` interface; benchmark on 8 OpenML tasks → no significant difference
   (Friedman p = 0.197), AutoGluon best average rank and fastest.
   See `docs/results/week10-automl.md`.
-- Total LLM spend so far: under ~$0.40.
+- Reported LLM spend through week 10 was under ~$0.40. The week 11 run used $0.01337.
 
-## Next: week 11 (from the CLAUDE.md roadmap)
+## Week 11 and next phase
 
-**ML correctness agent** (leakage detection, validation-strategy chooser, metric chooser) ·
-**Optuna** tuning · **SHAP** explanations · **calibration**. Suggested order:
-1. `ml/correctness.py`: deterministic checks first (target leakage via near-perfect single
-   feature / ID-like columns / post-outcome columns; train/test overlap; time order;
-   class imbalance → metric choice; group columns → GroupKFold). Unit tests with seeded
-   synthetic data where the right answer is known.
-2. Wrap it as an `AgentSpec` (see `agents/features.py` for the pattern: prompts + blocking
-   checks) so the LLM proposes and the checks verify.
-3. `ml/tuning.py` (Optuna, seeded, time budget), `ml/explain.py` (SHAP), calibration
-   (reliability curve + Brier/ECE). These run in the sandbox image, so add packages to
-   `images/sandbox/requirements.txt` and bump the tag (currently `dataquorum/sandbox:0.2`).
-4. ~10–15 eval tasks with known answers (e.g. a planted leaky column the agent must flag).
-5. Write `docs/results/week11-*.md`, update CLAUDE.md, CHANGELOG ("Unreleased"), spec.
+The correctness agent checks leakage, split integrity, validation and metric choice. The
+sandbox includes Optuna, SHAP and binary calibration. A live run returned seven verified
+warnings and five clean audits. See [week 11 results](docs/results/week11-correctness.md).
+Build the sandbox from the repository root using
+`docker build -t dataquorum/sandbox:0.3 -f images/sandbox/Dockerfile .`.
+
+**Week 12 awaits the user's go-ahead.** The roadmap calls for an MLflow model registry,
+FastAPI serving and Evidently drift reports. The week 11 forest report returns tables and
+keeps the fitted object inside its container. Week 12 needs an explicit trained-model
+artifact and feature-schema contract for registration and serving.
 
 Still open from earlier: week-14 ablation runs (`--no-checks`, `--no-recommend`); the PyPI
 upload (the **user** does it: `uv build`, then `uv publish` with their own token).
@@ -102,8 +100,8 @@ actually ran there; use it only for code and unit-test work.
 - Git Bash rewrites `/tmp`-style args to Windows paths. Use `MSYS_NO_PATHCONV=1` for
   `docker run ... --tmpfs /tmp` and similar.
 - Java: OpenJDK 21 on the host (H2O runs in its image anyway).
-- Docker images (build from `images/<name>/`):
-  `dataquorum/sandbox:0.2` (agent sandbox; Docker tests need it),
+- Docker images (sandbox build command above; other images use `images/<name>/`):
+  `dataquorum/sandbox:0.3` (agent sandbox; Docker tests need it),
   `dataquorum/automl:0.1` (FLAML + H2O), `dataquorum/autogluon:1.6.3`,
   `dataquorum/original:4ffeb7f` (parity runs of the original project).
 - The original project is cloned to `.original/` (git-ignored) with its own venv.
@@ -125,8 +123,8 @@ uv sync --all-groups                      # dev + evals groups
 uv run ruff format --check . && uv run ruff check .
 uv run mypy                               # strict
 set -o pipefail; uv run pytest -q         # Docker tests auto-skip without Docker/image
-uv run pytest -q -m "not docker"          # fast suite (304 tests)
-uv run python -m dataquorum.evals.runner --dry-run          # eval suite (needs key + Docker)
+uv run pytest -q -m "not docker"          # fast suite (320 tests)
+uv run python -m dataquorum.evals.runner --dry-run          # offline oracle (cached OpenML data)
 uv run python -m dataquorum.evals.rescore runs/evals/<id>   # re-grade saved outputs, no LLM
 uv run python -m dataquorum.ml.automl.benchmark --report runs/automl_bench/week10
 ```
@@ -159,8 +157,9 @@ every push (`gh run list`, `gh run watch <id>`).
 src/dataquorum/
   core/      llm, cost, budget, state, statuses, engine (LangGraph), prompts, inputs,
              findings, checkpoint, review, validation, agent_spec
-  agents/    cleaning, wrangling, visualization, loader, sql, eda, features, checks
+  agents/    cleaning, wrangling, visualization, loader, sql, eda, features, correctness, checks
   sandbox/   executor, docker_executor, sql_executor (sqlglot read-only guard)
+  ml/        correctness, tuning, explain, calibration, report
   ml/automl/ fit_predict (__init__), runner (inside container), benchmark
   evals/     datasets, faults, tasks/*.yaml, inputs, checkers(_ml), oracle, scoring,
              runner, compare, rescore, stats (Wilson, bootstrap, pass@k, McNemar, Friedman),
@@ -168,7 +167,7 @@ src/dataquorum/
   tracing/   recorder (DuckDB runs + llm_spend)
   supervisor/, app/   placeholders (weeks 13, 15–16)
 images/      sandbox, automl, autogluon, original
-docs/        spec.md (S1–S11), original-bug-log.md, results/week*.md
+docs/        spec.md (S1–S12), original-bug-log.md, results/week*.md
 research/    reasoning_effort/, mini_agent/
 tests/       unit + replay + tests/sandbox (Docker escape probes)
 runs/, data/ local outputs and dataset caches (git-ignored)

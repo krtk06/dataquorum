@@ -2,11 +2,11 @@
 
 **A team of AI data-science agents that must prove their work.**
 
-> Status: **v0.1.0 released; main is at week 10 of 17.** Seven agents work end to end: cleaning,
-> wrangling, visualization, loader (folders of files), SQL (read-only queries on SQLite or
-> DuckDB), EDA (with findings checked against the numbers) and feature engineering
-> (scikit-learn, with target-leakage checks). AutoML runs FLAML, H2O or AutoGluon behind one
-> interface. An ML-correctness agent, a supervisor and the Studio app are still to come.
+> **v0.1.0 is released.** The week 11 implementation adds an eighth agent that audits
+> machine-learning data for leakage and recommends how to split and score it. Sandbox tools
+> tune a random forest with Optuna, explain predictions with SHAP and measure calibration.
+> The existing agents cover cleaning, wrangling, visualization, loading, SQL, EDA and
+> feature engineering. AutoML supports FLAML, H2O and AutoGluon.
 
 DataQuorum is a Python library of LLM agents for data-science work. An agent takes a pandas
 DataFrame and a request in plain English, writes code, runs it in a locked-down Docker
@@ -39,7 +39,7 @@ key (developed against DeepSeek V4.1 Flash via OpenCode Go).
 ```bash
 git clone https://github.com/krtk06/dataquorum && cd dataquorum
 uv sync
-docker build -t dataquorum/sandbox:0.2 images/sandbox
+docker build -t dataquorum/sandbox:0.3 -f images/sandbox/Dockerfile .
 cp .env.example .env   # then add OPENCODE_GO_API_KEY
 ```
 
@@ -70,6 +70,26 @@ run = engine.resume(run.run_id, "Yes")      # or "Use the median instead", or "n
 
 `VISUALIZATION` returns a Plotly figure (`result.output.figure`).
 
+## Audit a prediction task
+
+```python
+from dataquorum.agents import CORRECTNESS, make_engine
+from dataquorum.ml.report import forest_report
+
+run = make_engine(CORRECTNESS).start(samples, "Audit classification. The target is churn.")
+print(run.result.status, run.result.message)
+if run.result.output is not None:
+    print(run.result.output.load())
+
+# With numeric predictors and a split column containing train/test labels
+curve = forest_report(samples, "churn", problem="classification", report="calibration")
+```
+
+A copied target or a customer appearing in both partitions warrants review. A verified audit
+with a flagged risk ends in `needs_review`. The `forest_report` API accepts `tuning`,
+`shap` or `calibration` and fits on training rows only. Calibration uses binary outcomes.
+See [week 11 results and limits](docs/results/week11-correctness.md).
+
 ## How it proves its work
 
 - **Structured output only.** The model returns a validated object with a `python_code`
@@ -86,8 +106,8 @@ run = engine.resume(run.run_id, "Yes")      # or "Use the median instead", or "n
 
 ## Evals
 
-102 tasks on five OpenML datasets (adult, credit-g, telco-customer-churn, ames-housing,
-diabetes), each with a known answer produced by seeded fault injection. Checkers compare
+114 tasks, including 102 on five OpenML datasets (adult, credit-g, telco-customer-churn, ames-housing,
+diabetes) and 12 on a seeded ML audit fixture with hand-labelled answers. Checkers compare
 outputs by value; an oracle check proves every task is solvable and not trivial.
 
 ```bash
@@ -107,11 +127,11 @@ Results so far: [week 6 baseline](docs/results/week6-baseline.md),
 ```
 src/dataquorum/
   core/      llm (structured output, cost, budget), engine (LangGraph), state, checks, review
-  agents/    cleaning, wrangling, visualization, loader, sql, eda, features (AgentSpecs)
+  agents/    cleaning, wrangling, visualization, loader, sql, eda, features, correctness (AgentSpecs)
   sandbox/   Docker executor
   tracing/   DuckDB run recorder
   evals/     datasets, faults, tasks (YAML), checkers, oracle, runner, stats, parity
-  ml/        automl (FLAML, H2O, AutoGluon behind one interface) and its benchmark
+  ml/        AutoML, correctness audits, tuning, SHAP explanations and calibration
 images/      sandbox, original (parity), autogluon, automl
 docs/        spec, bug log of the original, results
 ```

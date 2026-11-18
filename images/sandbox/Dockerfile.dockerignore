@@ -1,0 +1,8 @@
+**
+!images/
+!images/sandbox/
+!images/sandbox/requirements.lock
+!src/
+!src/dataquorum/
+!src/dataquorum/ml/
+!src/dataquorum/ml/*.py

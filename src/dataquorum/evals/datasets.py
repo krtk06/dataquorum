@@ -113,6 +113,10 @@ def download(ref: DatasetRef) -> Path:
 
 
 def load(name: str) -> pd.DataFrame:
+    if name == "audit-fixture":
+        from dataquorum.evals.audit_data import audit_dataset
+
+        return audit_dataset()
     ref = DATASETS[name]
     path = cache_path(name)
     if not path.exists():

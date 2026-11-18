@@ -6,3 +6,6 @@ plotly==7.1.0
 # 0.2: Excel files for the loader agent, pipelines for the feature-engineering agent.
 openpyxl==3.1.5
 scikit-learn==1.9.1
+# CPU-only model tuning and tree explanations.
+optuna==5.1.0
+shap==0.54.1

@@ -32,7 +32,7 @@ from dataquorum.evals.faults import FaultSpec, apply_faults
 from dataquorum.evals.inputs import DatabaseSpec, FileSpec, write_database, write_files
 
 TASKS_DIR = Path(__file__).parent / "tasks"
-ExpectStatus = Literal["ok", "failed"]  # ok = success or needs_review
+ExpectStatus = Literal["ok", "failed", "success", "needs_review"]  # ok = success or needs_review
 
 
 class CheckSpec(BaseModel):

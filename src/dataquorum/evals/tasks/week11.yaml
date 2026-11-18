@@ -1,0 +1,123 @@
+defaults:
+  agent: ml_correctness
+  dataset: audit-fixture
+  tags: [week11]
+  expect_status: success
+
+tasks:
+  - id: audit-clean
+    columns: [label, signal]
+    request: Audit this classification dataset. The target is label. Check leakage, validation strategy and metric.
+    checks:
+      - kind: audit_rows
+        rows:
+          - [validation, label, StratifiedKFold]
+          - [metric, label, accuracy]
+  - id: audit-identifier
+    expect_status: needs_review
+    columns: [label, signal, row_id]
+    request: Audit this classification dataset. The target is label. Check leakage, validation strategy and metric.
+    checks:
+      - kind: audit_rows
+        rows:
+          - [validation, label, StratifiedKFold]
+          - [metric, label, accuracy]
+          - [risk, row_id, identifier]
+  - id: audit-categorical-proxy
+    expect_status: needs_review
+    columns: [label, signal, code]
+    request: Audit this classification dataset. The target is label. Check leakage, validation strategy and metric.
+    checks:
+      - kind: audit_rows
+        rows:
+          - [validation, label, StratifiedKFold]
+          - [metric, label, accuracy]
+          - [risk, code, target_proxy]
+  - id: audit-regression-proxy
+    expect_status: needs_review
+    columns: [amount, signal, proxy]
+    request: Audit this regression dataset. The target is amount. Check leakage, validation strategy and metric.
+    checks:
+      - kind: audit_rows
+        rows:
+          - [validation, amount, KFold]
+          - [metric, amount, rmse]
+          - [risk, proxy, target_proxy]
+  - id: audit-post-outcome
+    expect_status: needs_review
+    columns: [label, signal, post_outcome_fee]
+    request: Audit this classification dataset. The target is label. Check leakage, validation strategy and metric.
+    checks:
+      - kind: audit_rows
+        rows:
+          - [validation, label, StratifiedKFold]
+          - [metric, label, accuracy]
+          - [risk, post_outcome_fee, post_outcome]
+  - id: audit-imbalance
+    columns: [rare, signal]
+    request: Audit this classification dataset. The target is rare. Check leakage, validation strategy and metric.
+    checks:
+      - kind: audit_rows
+        rows:
+          - [validation, rare, StratifiedKFold]
+          - [metric, rare, balanced_accuracy]
+  - id: audit-group
+    columns: [label, signal, household_id, split]
+    request: Audit this classification dataset. The target is label. Check leakage, validation strategy and metric.
+    checks:
+      - kind: audit_rows
+        rows:
+          - [validation, label, GroupKFold]
+          - [metric, label, accuracy]
+          - [group, household_id, hold_out_groups]
+  - id: audit-group-overlap
+    expect_status: needs_review
+    columns: [label, signal, site_id, split]
+    request: Audit this classification dataset. The target is label. Check leakage, validation strategy and metric.
+    checks:
+      - kind: audit_rows
+        rows:
+          - [validation, label, GroupKFold]
+          - [metric, label, accuracy]
+          - [group, site_id, hold_out_groups]
+          - [risk, site_id, group_overlap]
+  - id: audit-time
+    columns: [amount, signal, day, split]
+    request: Audit this regression dataset. The target is amount. Check leakage, validation strategy and metric.
+    checks:
+      - kind: audit_rows
+        rows:
+          - [validation, amount, TimeSeriesSplit]
+          - [metric, amount, rmse]
+          - [time, day, forward_only]
+  - id: audit-time-overlap
+    expect_status: needs_review
+    columns: [label, signal, shifted_day, split]
+    request: Audit this classification dataset. The target is label. Check leakage, validation strategy and metric.
+    checks:
+      - kind: audit_rows
+        rows:
+          - [validation, label, TimeSeriesSplit]
+          - [metric, label, accuracy]
+          - [time, shifted_day, forward_only]
+          - [risk, shifted_day, time_overlap]
+  - id: audit-row-overlap
+    expect_status: needs_review
+    columns: [label, repeated, split]
+    request: Audit this classification dataset. The target is label. Check leakage, validation strategy and metric.
+    checks:
+      - kind: audit_rows
+        rows:
+          - [validation, label, StratifiedKFold]
+          - [metric, label, accuracy]
+          - [risk, split, row_overlap]
+  - id: audit-group-and-time
+    columns: [label, signal, household_id, day, split]
+    request: Audit this classification dataset. The target is label. Check leakage, validation strategy and metric.
+    checks:
+      - kind: audit_rows
+        rows:
+          - [validation, label, grouped_forward_split]
+          - [metric, label, accuracy]
+          - [group, household_id, hold_out_groups]
+          - [time, day, forward_only]

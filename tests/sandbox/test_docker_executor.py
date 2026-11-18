@@ -60,7 +60,7 @@ def test_bad_code_is_reported_not_raised(
 def test_infinite_loop_times_out_and_is_cleaned_up(
     client: docker.DockerClient, input_path: Path, tmp_path: Path
 ) -> None:
-    fast = DockerExecutor("dataquorum/sandbox:0.2", timeout_seconds=4, client=client)
+    fast = DockerExecutor("dataquorum/sandbox:0.3", timeout_seconds=4, client=client)
     start = time.perf_counter()
     result = fast.run("def transform(df):\n    while True:\n        pass\n", input_path, tmp_path)
     assert not result.ok and result.error == "Timed out after 4 s."
@@ -84,7 +84,7 @@ def test_stdout_flood_does_not_break_the_run(
 def test_output_size_is_capped(
     client: docker.DockerClient, input_path: Path, tmp_path: Path
 ) -> None:
-    small = DockerExecutor("dataquorum/sandbox:0.2", max_output_mb=1, client=client)
+    small = DockerExecutor("dataquorum/sandbox:0.3", max_output_mb=1, client=client)
     code = (
         "import numpy as np, pandas as pd\n"
         "def transform(df):\n"

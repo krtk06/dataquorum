@@ -81,7 +81,7 @@ def describe_database(path: Path, sample_rows: int = 3) -> str:
         finally:
             con.close()
         return "\n".join(lines)
-    lite = sqlite3.connect(f"file:{path.as_posix()}?mode=ro", uri=True)
+    lite = sqlite3.connect(f"{path.resolve().as_uri()}?mode=ro", uri=True)
     try:
         tables = lite.execute(
             "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"

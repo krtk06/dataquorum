@@ -40,7 +40,16 @@ def rescore(run_dir: Path) -> tuple[list[TaskResult], list[TaskResult]]:
         output = pd.read_parquet(output_file)
         checks = [run_checker(c.kind, built, output, c.params) for c in task.checks]
         outcome = classify(row["status"], task.expect_status, checks)
-        after.append(_to_result({**row, "checks": [vars(c) for c in checks], "outcome": outcome}))
+        after.append(
+            _to_result(
+                {
+                    **row,
+                    "expect_status": task.expect_status,
+                    "checks": [vars(c) for c in checks],
+                    "outcome": outcome,
+                }
+            )
+        )
     return before, after
 
 

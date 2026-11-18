@@ -63,7 +63,7 @@ def classify(status: str, expect_status: str, checks: list[CheckOutcome]) -> Out
         return "flagged" if status == "needs_review" else "false_success"
     if status == "failed":
         return "false_failure" if checks_pass else "honest_failure"
-    if checks_pass:
+    if checks_pass and expect_status in ("ok", status):
         return "correct"
     return "flagged" if status == "needs_review" else "false_success"
 

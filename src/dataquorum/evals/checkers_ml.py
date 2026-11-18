@@ -196,7 +196,17 @@ def minmax(b: BuiltTask, output: Output, columns: list[str]) -> CheckOutcome:
     return _scaled(b, output, columns, "minmax")
 
 
+def audit_rows(b: BuiltTask, output: Output, rows: list[list[str]]) -> CheckOutcome:
+    """Compare against hand-labelled fixture answers, including unexpected and repeated rows."""
+    if not isinstance(output, pd.DataFrame) or list(output.columns) != ["kind", "subject", "value"]:
+        return CheckOutcome("audit_rows", False, "Missing audit table or columns")
+    actual = sorted(output.itertuples(index=False, name=None))
+    expected = sorted(tuple(row) for row in rows)
+    return CheckOutcome("audit_rows", actual == expected, f"Expected {expected}, got {actual}")
+
+
 ML_CHECKERS: dict[str, Callable[..., CheckOutcome]] = {
+    "audit_rows": audit_rows,
     "per_column_stat": per_column_stat,
     "correlation": correlation,
     "column_unchanged": column_unchanged,

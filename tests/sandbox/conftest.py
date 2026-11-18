@@ -16,7 +16,7 @@ import pytest
 
 from dataquorum.sandbox.docker_executor import LABEL, DockerExecutor
 
-IMAGE = "dataquorum/sandbox:0.2"
+IMAGE = "dataquorum/sandbox:0.3"
 
 
 def _unavailable_reason() -> str | None:

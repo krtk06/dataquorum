@@ -51,6 +51,11 @@ def oracle_output(b: BuiltTask) -> Output:
         return None
     if t.agent in ("data_cleaning", "data_loader"):
         return b.expected
+    if t.agent == "ml_correctness":
+        from dataquorum.agents.correctness import requested_audit
+
+        assert isinstance(b.messy, pd.DataFrame)
+        return requested_audit(b.messy, b.request)
     if t.agent == "feature_engineering":
         return _features(b)
     aggregates = [c.params for c in t.checks if c.kind == "aggregate"]
@@ -182,7 +187,7 @@ def check_task(b: BuiltTask) -> list[str]:
         outcome = run_checker(spec.kind, b, oracle, spec.params)
         if not outcome.passed:
             problems.append(f"oracle fails {outcome.name}: {outcome.detail}")
-    if b.task.expect_status == "ok":
+    if b.task.expect_status != "failed":
         naive: Output = None  # folders, databases and charts have no "unchanged input" answer
         if isinstance(b.messy, pd.DataFrame) and b.task.agent != "data_visualization":
             naive = b.messy

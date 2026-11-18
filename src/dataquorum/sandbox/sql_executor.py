@@ -53,7 +53,7 @@ def table_names(path: Path) -> set[str]:
             return {str(r[0]).lower() for r in con.execute("SHOW TABLES").fetchall()}
         finally:
             con.close()
-    lite = sqlite3.connect(f"file:{path.as_posix()}?mode=ro", uri=True)
+    lite = sqlite3.connect(f"{path.resolve().as_uri()}?mode=ro", uri=True)
     try:
         rows = lite.execute("SELECT name FROM sqlite_master WHERE type IN ('table', 'view')")
         return {str(r[0]).lower() for r in rows.fetchall()}
@@ -134,7 +134,7 @@ class SqlExecutor:
         return ExecutionResult(True, None, out, time.perf_counter() - start)
 
     def _run_sqlite(self, sql: str, path: Path) -> pd.DataFrame:
-        lite = sqlite3.connect(f"file:{path.as_posix()}?mode=ro", uri=True)
+        lite = sqlite3.connect(f"{path.resolve().as_uri()}?mode=ro", uri=True)
         deadline = time.monotonic() + self.timeout_seconds
         lite.set_progress_handler(lambda: int(time.monotonic() > deadline), 10_000)
         try:

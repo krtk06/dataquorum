@@ -1,6 +1,11 @@
 # Changelog
 
-## Unreleased (weeks 9–10)
+## Unreleased (weeks 9–11)
+
+- ML correctness agent with host-verified leakage checks, group and time validation,
+  imbalance-aware metric choice and 12 new known-answer evaluations.
+- Sandbox 0.3 adds seeded Optuna tuning, tree SHAP explanations and held-out binary
+  calibration reports. Build from the repository root using the updated README command.
 
 - AutoML behind one interface (`dataquorum.ml.automl.fit_predict`): FLAML, H2O and
   AutoGluon, each in a locked-down container, scored on the host from test predictions.

@@ -1,7 +1,7 @@
 # Sandbox image for running LLM-generated pandas / Plotly code (spec S5).
 # Small on purpose: only what generated code may import.
 #
-#   docker build -t dataquorum/sandbox:0.2 images/sandbox
+#   docker build -t dataquorum/sandbox:0.3 -f images/sandbox/Dockerfile .
 #
 # Run flags live in src/dataquorum/sandbox/docker_executor.py (no network, read-only root,
 # non-root user, all capabilities dropped, memory/CPU/PID limits, timeout).
@@ -13,12 +13,14 @@ ENV PIP_NO_CACHE_DIR=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
-COPY requirements.txt /tmp/requirements.txt
+COPY images/sandbox/requirements.lock /tmp/requirements.txt
 RUN pip install -r /tmp/requirements.txt && rm /tmp/requirements.txt
 
 RUN useradd --uid 10001 --no-create-home --shell /usr/sbin/nologin sandbox
 ENV HOME=/tmp \
     MPLCONFIGDIR=/tmp/matplotlib \
     XDG_CACHE_HOME=/tmp/.cache
+COPY src/dataquorum/ml/*.py /opt/dataquorum/ml/
+ENV PYTHONPATH=/opt
 USER sandbox
 WORKDIR /tmp

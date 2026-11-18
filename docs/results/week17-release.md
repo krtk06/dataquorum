@@ -27,8 +27,8 @@ walkthrough ran from the installed wheel in a separate working directory. Docker
 and API credentials were disabled there. The three steps verified, the expected revenue
 chart rendered, and the downloaded JSON contained the expected three-step recipe.
 
-The final wheel contains the same 103 package files as the wheel used in that walkthrough.
-The source archive independently built and installed in a separate Python 3.12 environment.
+The published wheel contains the Studio assets used in that walkthrough. The source
+archive independently built and installed in a separate Python 3.12 environment.
 Both artifacts passed `twine check --strict` and matched their SHA-256 checksums. The
 repository suite passed all 396 tests, including Docker checks. Ruff, strict mypy, and
 the uv lock check passed. The suite emitted an MLflow dependency deprecation warning.

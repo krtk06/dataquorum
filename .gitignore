@@ -36,3 +36,6 @@ Thumbs.db
 
 # Claude Code local settings
 .claude/settings.local.json
+
+# Project-local Impeccable skill installed by npm
+.agents/skills/impeccable/

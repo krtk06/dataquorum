@@ -152,3 +152,97 @@ The forest uses finite numeric predictors. The CPU and WSL limits stayed in plac
   answers passed. Ruff formatting, lint and strict mypy passed.
 - Next is week 12, subject to user go-ahead: MLflow registry, FastAPI serving and Evidently
   drift reporting.
+
+**Week 12 implemented 2026-11-18** ([results](docs/results/week12-deployment.md), spec S13).
+The audited Optuna forest exports from sandbox 0.4 as skops plus a manifest. The host
+checks the digest, scikit-learn version, fitted feature schema and held-out predictions
+before replacing the destination file. The local MLflow registry stores numbered model
+versions with their CV metrics. FastAPI serves one selected version on loopback. The
+Evidently drift script uses a separate lock to resolve its Plotly 5 requirement.
+
+- The initial export hit skops' trust check for scikit-learn's compiled tree type.
+  The loader allows that specific type for trusted local forests.
+- Drift verification on two numeric columns found 0 flagged in the identical control
+  and 1 flagged after shifting a single column. Week 12 required no LLM calls.
+- Local verification: 320 non-Docker tests, 41 Docker tests, Ruff, strict mypy, and
+  a separate prediction smoke test over loopback with the Uvicorn command.
+- Next is week 13, subject to the user's go-ahead: LLM supervisor and learned routing.
+
+**Week 13 implemented 2026-11-18** ([results](docs/results/week13-routing.md), spec S7).
+The LangGraph supervisor keeps the original request and provides separate per-step
+instructions. It forwards tabular outputs, records child runs under one parent, and
+stops on refusal, failure, incompatible input, repeated input or the dispatch limit.
+The parent keeps the worst child status. The shared client treats a native provider
+refusal as terminal and records its usage without a repair call.
+
+- The experiment uses 225 template-expanded training examples and 72 separately written
+  test requests. MiniLM scored 57/72 with 6/8 refusals. TF-IDF scored 51/72 with 2/8
+  refusals. Paired McNemar p = 0.286. The learned router is experimental.
+- Follow-up added 144 individually written examples with MiniLM and the classifier
+  settings held fixed. Accuracy on a fresh 72-request holdout rose from 57/72 to 67/72.
+  Refusals rose from 4/8 to 6/8. The original holdout reached 68/72 in the diagnostic run.
+  Both datasets and the comparison runner are in `research/router_benchmark/`.
+- The official MiniLM model runs through ONNX Runtime on the CPU. This keeps PyTorch
+  out of the experiment. Both files use a pinned revision and SHA-256 checks.
+- Verification: 377 tests passed. The default supervisor ran scripted inputs through Docker
+  and recorded both parent and child. Ruff and mypy passed in the base environment.
+  The base type check also caught decorators from the optional FastAPI import. Explicit
+  route registration fixed the Week 12 serving module's base-install check.
+- The paid LLM comparison awaits approval. The offline runner and labeled holdout are ready.
+- Next is week 14, subject to user go-ahead: ablations, cost and accuracy comparisons,
+  and a failure taxonomy.
+
+**Week 14 offline work verified 2026-11-18** ([results and plan](docs/results/week14-study.md)).
+All 114 answer keys passed. The fixed study interleaves 16 cases across five model
+configurations and two DeepSeek ablations. It records reported allowance per call and
+can resume under the same plan and runtime provenance.
+
+- Scripted examples confirmed false successes from omitted leakage, invented EDA findings
+  and an invented answer to an impossible request. The `--no-checks` flag now skips EDA
+  grounding while preserving the explanation call.
+- The study distinguishes an explicit blocker from a provider failure and checks EDA
+  findings after execution. Regrading the five archived Week 9 flags confirmed that the
+  feature-name checker caused them.
+- Verification: 385 local tests passed, including 41 Docker tests. Ruff and strict mypy
+  passed. The mocked study completed all seven arms on one task and resumed without
+  additional model calls or duplicate trial records.
+- The 112-trial live run awaits allowance approval. Next phase is the Studio app.
+
+**Weeks 15–16 Studio implemented 2026-11-18** ([workflow and results](docs/results/week15-16-studio.md),
+spec S14). The optional Studio command launches Streamlit on loopback. It draws a
+Streamlit Flow canvas and edits a versioned recipe through typed step settings.
+The runner forwards verified tables and blocks unsafe dependents while continuing
+independent branches. Browser sessions keep their own recipe and source.
+
+- Data, Charts, Model and Runs views reuse shipped pandas, Plotly, sandbox and DuckDB
+  interfaces. A deterministic 192-order offline demo supplies immediate results.
+  Model export and registry controls use the serving extra.
+- JSON saves the recipe and Python export executes it using the same pipeline runner.
+  Source data and results live separately in the local workspace.
+- Local verification: 396 tests passed, including 41 Docker tests, plus Ruff and mypy.
+  Browser checks covered the canvas, step creation, JSON and Python downloads, recipe
+  restore, CSV preview, demo chart and Docker tuning report. Moved step creation to an
+  inline form after browser testing exposed modal dismissal during a canvas rerun.
+- Studio styling follow-up: installed the project-local Impeccable skill and adopted a
+  graphite and mint palette across the editor and demo chart. The inspector stacks when
+  space is limited, and its transitions respect reduced motion. Browser testing also
+  exposed a canvas rerun race. Using a stable seed within each recipe revision lets
+  Streamlit Flow retain its browser state across unrelated reruns.
+- Studio redesign replaces that treatment with warm charcoal and a muted brass action
+  color. All five views use a compact top navigation. A native Streamlit component
+  replaces the iframe dependency. It traces the selected step's upstream path and
+  offers zoom, a mobile list view, and keyboard selection. Design decisions live in
+  `DESIGN.md`. The wheel includes the shipped component assets.
+
+**Week 17 release preparation 2026-11-18**
+([release handoff](docs/results/week17-release.md)). Prepared v1.0.0 for owner review.
+The README leads with the offline Studio. The 46-second video was captured from a
+wheel installed in a clean Python 3.12 environment with no API credentials or Docker
+access. Two write-ups cover validation and first-step routing with the completed
+benchmark evidence and its limitations.
+
+- The wheel and sdist passed Twine and checksum checks. A separate environment built
+  and installed the sdist. The repository suite passed all 396 tests, plus Ruff and mypy.
+- Public release listings showed GitHub v0.1.0 and PyPI v0.0.1, both for this project.
+  That corrects the earlier PyPI placeholder note. The user owns PyPI publishing.
+- Week 13's paid routing comparison and Week 14's 112-trial live study await approval.

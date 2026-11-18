@@ -4,29 +4,29 @@ from __future__ import annotations
 
 import tempfile
 from pathlib import Path
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 import pandas as pd
 
 from dataquorum.ml.correctness import Problem, audit
 
+if TYPE_CHECKING:
+    from dataquorum.ml.tuning import TunedForest
+
 Report = Literal["tuning", "shap", "calibration"]
 
 
-def _report(
+def _fit(
     frame: pd.DataFrame,
     target: str,
     problem: Problem,
-    report: Report,
     split: str,
     group: str | None,
     time: str | None,
     trials: int,
     budget_s: float,
     seed: int,
-) -> pd.DataFrame:
-    from dataquorum.ml.calibration import calibration
-    from dataquorum.ml.explain import explain_tree
+) -> tuple[TunedForest, pd.DataFrame, pd.DataFrame]:
     from dataquorum.ml.tuning import tune_forest
 
     plan = audit(frame, target, problem=problem, split=split, group=group, time=time)
@@ -45,6 +45,25 @@ def _report(
         trials=trials,
         budget_s=budget_s,
     )
+    return tuned, train, test
+
+
+def _report(
+    frame: pd.DataFrame,
+    target: str,
+    problem: Problem,
+    report: Report,
+    split: str,
+    group: str | None,
+    time: str | None,
+    trials: int,
+    budget_s: float,
+    seed: int,
+) -> pd.DataFrame:
+    from dataquorum.ml.calibration import calibration
+    from dataquorum.ml.explain import explain_tree
+
+    tuned, _, test = _fit(frame, target, problem, split, group, time, trials, budget_s, seed)
     if report == "tuning":
         return pd.DataFrame(
             [
@@ -83,13 +102,17 @@ def forest_report(
     seed: int = 7,
 ) -> pd.DataFrame:
     """Frame contains a train/test marker. Fits and model objects stay in the container."""
-    from dataquorum.sandbox.docker_executor import DockerExecutor
-
     args = (target, problem, report, split, group, time, trials, budget_s, seed)
     code = (
         "from dataquorum.ml.report import _report\n"
         f"def transform(df):\n    return _report(df, *{args!r})"
     )
+    return _run_forest_code(frame, code, budget_s=budget_s)
+
+
+def _run_forest_code(frame: pd.DataFrame, code: str, *, budget_s: float) -> pd.DataFrame:
+    from dataquorum.sandbox.docker_executor import DockerExecutor
+
     with tempfile.TemporaryDirectory(prefix="dq-forest-") as temp:
         root = Path(temp)
         path = root / "samples.parquet"

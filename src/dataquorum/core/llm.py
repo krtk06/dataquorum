@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import copy
 import json
+import math
 import os
 import time
 import uuid
@@ -68,6 +69,7 @@ class LLMConfig(BaseModel):
     temperature: float | None = None
     timeout_seconds: float = 180.0
     max_retries: int = 3  # SDK-level retries for connection errors, 429 and 5xx
+    require_reported_cost: bool = False
 
     @classmethod
     def from_env(cls) -> LLMConfig:
@@ -99,6 +101,14 @@ class StructuredOutputError(LLMError):
     def __init__(self, message: str, usage: Usage, raw: str | None) -> None:
         super().__init__(message, usage)
         self.raw = raw
+
+
+class LLMRefusal(LLMError):
+    """The provider returned a refusal instead of structured output."""
+
+
+class MissingReportedCostError(RuntimeError):
+    """A metered study cannot continue after a response with unknown allowance."""
 
 
 @dataclass
@@ -192,7 +202,9 @@ class LLMClient:
         repaired = False
         while True:
             try:
-                content, reasoning, call_usage = self._call(model, convo, response_format, effort)
+                content, reasoning, refusal, call_usage = self._call(
+                    model, convo, response_format, effort
+                )
             except openai.BadRequestError as exc:
                 if response_format["type"] != "json_schema":
                     raise LLMError(f"{model} rejected the request: {exc}", usage) from exc
@@ -202,6 +214,8 @@ class LLMClient:
             except openai.OpenAIError as exc:
                 raise LLMError(f"{model} call failed: {exc}", usage) from exc
             usage = usage + call_usage
+            if refusal and refusal.strip():
+                raise LLMRefusal(refusal, usage)
 
             try:
                 value = schema.model_validate_json(content or "")
@@ -223,7 +237,7 @@ class LLMClient:
         messages: list[Message],
         response_format: dict[str, Any],
         effort: ReasoningEffort,
-    ) -> tuple[str | None, str | None, Usage]:
+    ) -> tuple[str | None, str | None, str | None, Usage]:
         if self.budget:
             self.budget.check()
         extra: dict[str, Any] = {}
@@ -242,13 +256,26 @@ class LLMClient:
         seconds = time.perf_counter() - start
 
         raw_usage = response.usage.model_dump() if response.usage else {}
+        if self.config.require_reported_cost:
+            go = raw_usage.get("opencode")
+            costs = (
+                [go.get(key) for key in ("allowance", "list_cost")] if isinstance(go, dict) else []
+            )
+            if not costs or not all(
+                isinstance(cost, int | float)
+                and not isinstance(cost, bool)
+                and math.isfinite(cost)
+                and cost >= 0
+                for cost in costs
+            ):
+                raise MissingReportedCostError(f"{model} did not report valid Go costs.")
         usage = usage_from_response(model, raw_usage, seconds=seconds, when=datetime.now(UTC))
         if self.budget:
             self.budget.record(usage)
 
         message = response.choices[0].message
         reasoning = (message.model_extra or {}).get("reasoning_content")
-        return message.content, reasoning, usage
+        return message.content, reasoning, message.refusal, usage
 
 
 def _json_object_mode(

@@ -12,6 +12,7 @@ optuna==5.1.0
 packaging==26.3
 pandas==2.3.3
 plotly==7.1.0
+prettytable==3.19.0
 pyarrow==26.0.1
 python-dateutil==4.0.0
 pytz==2026.6
@@ -19,9 +20,11 @@ pyyaml==6.0.3
 scikit-learn==1.9.1
 scipy==1.18.1
 shap==0.54.1
+skops==0.16.0
 slicer==0.0.8
 sqlalchemy==2.1.9
 threadpoolctl==3.8.0
 tqdm==4.70.1
 typing-extensions==4.16.0
 tzdata==2026.6
+wcwidth==0.9.4

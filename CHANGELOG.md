@@ -1,6 +1,36 @@
 # Changelog
 
-## Unreleased (weeks 9–11)
+## 1.0.0
+
+### Studio
+
+- Local Streamlit Studio with an offline retail workflow, versioned JSON recipes, and
+  runnable Python export. The workflow diagram traces a selected step's inputs and
+  switches to a readable list on smaller screens.
+- Inspect step checks, preview source and verified tables, and export Plotly charts.
+  Studio also includes model audits, sandbox reports, and local DuckDB run history.
+- The captioned walkthrough shows the demo, its verification checks, and recipe export.
+  [Studio walkthrough](docs/media/studio-demo.mp4)
+
+### Supervisor and evaluation
+
+- Resumable paired study for safeguard ablations and five OpenCode Go model configurations.
+  Reports matched-task accuracy, false successes, metered allowance, timing and failure evidence.
+  Offline controls are complete. The paired live study is pending.
+- `--no-checks` disables EDA grounding and preserves the explanation call.
+
+- LangGraph supervisor for multi-step requests with verbatim user instructions, exact
+  routing, refusal handling, input compatibility checks and a bounded execution loop.
+- Offline MiniLM and TF-IDF routing experiment with 225 original training requests and 72
+  held-out requests. A follow-up adds 144 training examples and a fresh 72-request holdout.
+
+### Model tooling and agents
+
+- Sandbox 0.4 exports audited random forests with their feature schema and cross-validation
+  metadata. The host verifies prediction parity before saving the artifact.
+- Local MLflow registry and versioned FastAPI batch prediction, available via the `serving` extra.
+- Evidently compares numeric feature batches and produces HTML reports and JSON metrics
+  from its own locked environment.
 
 - ML correctness agent with host-verified leakage checks, group and time validation,
   imbalance-aware metric choice and 12 new known-answer evaluations.
@@ -21,6 +51,13 @@
 - Sandbox image 0.2 adds openpyxl and scikit-learn.
 - 31 new eval tasks (102 total), checkers for statistics and features, and
   `dataquorum.evals.rescore` to re-grade saved outputs after a checker fix.
+
+### Upgrade notes
+
+- Python 3.12 is required. Use the `studio` extra for the browser app, `serving` for the model
+  registry and API, and `routing` for the offline MiniLM experiment.
+- Rebuild the live-agent and model-tool sandbox as `dataquorum/sandbox:0.4` from the repository
+  root. The bundled Studio demo runs locally with the Studio extra.
 
 ## 0.1.0 (2026-11-16): first usable release
 

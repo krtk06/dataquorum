@@ -36,6 +36,7 @@ class AgentSpec:
     generic_checks: tuple[Check, ...] | None = None  # None = defaults for output_kind
     reasoning_effort: ReasoningEffort | None = None  # None = LLMConfig default
     explain_findings: bool = False  # EDA: write findings grounded in the output table
+    verify_findings: bool = True
 
     @property
     def function_name(self) -> str:

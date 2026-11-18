@@ -117,10 +117,10 @@ Container settings (week 5, docker SDK):
   carry the label `dataquorum.sandbox` so leftovers are easy to find
 - generated-code failures return `ExecutionResult(ok=False)`; Docker down or image missing
   raise `SandboxUnavailableError` (the engine must not burn LLM retries on those)
-- image `dataquorum/sandbox:0.3` installs the Linux pins in
+- image `dataquorum/sandbox:0.4` installs the Linux pins in
   `images/sandbox/requirements.lock`. The build context includes the sandbox lock and the
   ML helper modules. Build at the repository root with
-  `docker build -t dataquorum/sandbox:0.3 -f images/sandbox/Dockerfile .`.
+  `docker build -t dataquorum/sandbox:0.4 -f images/sandbox/Dockerfile .`.
 - folder inputs (loader agent) are mounted read-only at `/io/data`.
 
 Protocol: host writes `input.parquet`, `code.py` and `runner.py` to the input mount. The
@@ -197,17 +197,19 @@ class RouteDecision(BaseModel):
     refusal: str | None      # set when the request cannot or should not be done
 ```
 
-- The user's original request is passed unchanged to every agent; router instructions are
-  a separate field (bug log #13).
-- A refusal ends the run with `failed` and the refusal text as `message`. It is never
-  converted to "finish" (bug log #12).
-- Invalid router output gets one repair attempt, then the run fails. No substring fallback
-  (bug log #10, #11).
-- Hard cap on supervisor steps (default 8) and no agent repeated with identical inputs.
-- The final supervisor status is the worst status among the agents that ran.
-- Week 13 experiment: a learned router (sentence-transformers embeddings + scikit-learn
-  classifier on about 300 labelled requests), compared with the LLM router on accuracy, cost
-  and latency.
+- Each child engine receives the original request verbatim and separate step instructions
+  (bug log #13). The router sees the latest valid table and a summary of completed child steps.
+  A figure stays in the child result while the active table remains available for later steps.
+- Structured and provider-native refusals end the run with `failed` and preserve the refusal
+  text as `message` (bug log #12). Malformed structured output gets one repair attempt
+  through the shared client (bug log #10, #11).
+- The graph allows up to eight child dispatches by default and rejects incompatible input
+  kinds or repeat dispatch of the same agent on identical input snapshots.
+- A failed child stops the workflow. A warning carries through later successful steps.
+  Finishing before any child ran is a failure. Parent and child run IDs are linked in DuckDB.
+- The learned-router experiment compares MiniLM embeddings and TF-IDF with logistic
+  regression on 297 synthetic labeled requests. A separate opt-in mode uses the same
+  holdout for live LLM accuracy, allowance and latency.
 
 ## S8. Tracing (`tracing/recorder.py`)
 
@@ -321,3 +323,42 @@ Implemented (week 6), all in `src/dataquorum/evals/`:
   SHAP ranks mean absolute contributions over up to 128 held-out rows, averaging across
   classes for classification. Binary calibration returns the reliability table, Brier
   score, count-weighted expected calibration error and the positive label.
+
+## S13. Model lifecycle (week 12)
+
+- `ml.export.export_forest` uses the Week 11 audit and Optuna fit in the same Docker
+  sandbox. It stages a ZIP containing the fitted scikit-learn forest in skops format
+  and a versioned manifest. The manifest records ordered features, training dtypes,
+  target, problem, scikit-learn version, seed, trial count, selected parameters, CV
+  metric and score, and a SHA-256 digest of the model bytes.
+- The host checks the archive, payload digest, installed scikit-learn version, estimator
+  type and fitted feature names. Export checks prediction parity against up to 32 held-out
+  rows before publishing the file. Both the artifact and the local registry stay on disk.
+- `ForestRegistry` uses a local SQLite MLflow tracking and registry store plus local
+  artifacts. Each registration creates a run, logs the tuning parameters and score,
+  and registers a numbered version linked to that run. Load models by name and version
+  with `ForestRegistry.load`. Use artifacts created by your own DataQuorum workflow.
+- The FastAPI process serves a single model version on loopback. `GET /health` reports
+  readiness and version. `GET /schema` reports the training feature names and dtypes.
+  `POST /predict` accepts 1–1,000 rows, requires exactly the named features in each
+  row, checks finite numeric values in the float32 range, and returns ordered predictions.
+- `scripts/model_drift.py` compares the distributions of two numeric input batches. It
+  validates shared feature names and writes an Evidently HTML report and JSON metrics.
+  The script has an independent lock because Evidently requires Plotly 5 and the agents
+  use Plotly 7. A drift flag indicates a distribution shift in inputs. Assess prediction
+  quality separately once outcomes are available.
+
+## S14. Studio (weeks 15–16)
+
+- The optional `studio` extra runs a loopback Streamlit web app with Pipeline, Data,
+  Charts, Model and Runs views. The bundled demo works offline.
+- A versioned recipe stores an ordered list of named steps. Each step points to the
+  source or one earlier table. The editor validates IDs, supported agents and input
+  types. Recipes store configuration independently of data and artifacts.
+- Execution uses the shared engines and existing sandbox. Failed or flagged outputs
+  block dependent steps. Independent branches continue. The pipeline status is
+  derived from its results and displayed with per-step reasoning, checks and code.
+- Data and Charts display inputs and available outputs. Model calls the audited
+  sandbox forest APIs. The Runs view reads recent DuckDB traces in read-only mode.
+- Save and load recipe JSON through Studio. Python export is a CLI wrapper around
+  the same live runner and consumes a local source path.

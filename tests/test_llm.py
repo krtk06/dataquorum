@@ -15,6 +15,7 @@ from dataquorum.core.llm import (
     LLMClient,
     LLMConfig,
     LLMError,
+    MissingReportedCostError,
     StructuredOutputError,
     strict_json_schema,
 )
@@ -190,6 +191,15 @@ def test_budget_guard_blocks_before_any_request_and_records_spend() -> None:
     server = FakeServer((200, completion(VALID)))
     make_client(server, BudgetGuard(fresh, mode="eval")).structured(MESSAGES, Plan)
     assert fresh.entries[0].allowance_usd == pytest.approx(0.0006)
+
+
+def test_metered_study_refuses_to_estimate_missing_provider_cost() -> None:
+    body = completion(VALID)
+    body["usage"] = {"prompt_tokens": 50, "completion_tokens": 100}
+    server = FakeServer((200, body))
+    with pytest.raises(MissingReportedCostError):
+        make_client(server, require_reported_cost=True).structured(MESSAGES, Plan)
+    assert len(server.requests) == 1
 
 
 def test_strict_schema_closes_nested_objects() -> None:

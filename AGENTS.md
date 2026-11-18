@@ -13,7 +13,7 @@ no code copied). It is a Python library of LLM agents that write pandas/SQL/skle
 run it in a locked-down Docker sandbox, validate the result and report an honest
 `success` / `failed` / `needs_review`. A 17-week portfolio project (ML + data science depth)
 with ~15 h/week. Repo: https://github.com/krtk06/dataquorum (public). v0.1.0 is released on
-GitHub; **weeks 1–11 are implemented; week 12 is next.**
+GitHub; **Studio for weeks 15–16 is implemented and week 14's live study is pending.**
 
 ## Where things stand (2026-11-18)
 
@@ -28,21 +28,36 @@ GitHub; **weeks 1–11 are implemented; week 12 is next.**
   See `docs/results/week10-automl.md`.
 - Reported LLM spend through week 10 was under ~$0.40. The week 11 run used $0.01337.
 
-## Week 11 and next phase
+## Studio and next phase
 
-The correctness agent checks leakage, split integrity, validation and metric choice. The
-sandbox includes Optuna, SHAP and binary calibration. A live run returned seven verified
-warnings and five clean audits. See [week 11 results](docs/results/week11-correctness.md).
+The LangGraph supervisor routes compatible inputs through the existing agents, preserves
+the original request and records refusal reasons and parent/child usage. The MiniLM
+follow-up improved from 57/72 to 67/72 on a fresh holdout with 144 additional training
+examples. See [week 13 routing](docs/results/week13-routing.md).
+The offline benchmark uses the `routing` extra, with pinned CPU-only ONNX weights.
+
 Build the sandbox from the repository root using
-`docker build -t dataquorum/sandbox:0.3 -f images/sandbox/Dockerfile .`.
+`docker build -t dataquorum/sandbox:0.4 -f images/sandbox/Dockerfile .`.
 
-**Week 12 awaits the user's go-ahead.** The roadmap calls for an MLflow model registry,
-FastAPI serving and Evidently drift reports. The week 11 forest report returns tables and
-keeps the fitted object inside its container. Week 12 needs an explicit trained-model
-artifact and feature-schema contract for registration and serving.
+**Week 14 offline work is verified.** All 114 answer keys passed. The study runner has
+16 matched tasks, five models and two DeepSeek ablations. Scripted controls verified
+the failure taxonomy and ablation effects. The 112-trial live study awaits allowance
+approval. See [week 14 study](docs/results/week14-study.md).
 
-Still open from earlier: week-14 ablation runs (`--no-checks`, `--no-recommend`); the PyPI
-upload (the **user** does it: `uv build`, then `uv publish` with their own token).
+**Weeks 15–16** added the local Streamlit Studio. Run it with
+`uv run --locked --extra studio dataquorum-studio`. The offline demo exercises its
+pipeline, tables and Plotly chart without Go or Docker. The theme and workflow design
+are documented in `DESIGN.md`. The local Impeccable skill can be
+installed with `npx impeccable install --providers=codex --scope=project --no-hooks`.
+See
+[Studio workflows and verification](docs/results/week15-16-studio.md).
+
+**Week 17** prepared the v1.0.0 candidate, README, captioned Studio demo, and two
+write-ups. Local distributions are in `dist/v1.0.0`. See
+[release verification and publishing handoff](docs/results/week17-release.md).
+
+The v1.0.0 PyPI upload remains with the user. The package listing shows the existing
+v0.0.1 placeholder.
 
 ## Working with the user
 
@@ -101,7 +116,7 @@ actually ran there; use it only for code and unit-test work.
   `docker run ... --tmpfs /tmp` and similar.
 - Java: OpenJDK 21 on the host (H2O runs in its image anyway).
 - Docker images (sandbox build command above; other images use `images/<name>/`):
-  `dataquorum/sandbox:0.3` (agent sandbox; Docker tests need it),
+  `dataquorum/sandbox:0.4` (agent sandbox; Docker tests need it),
   `dataquorum/automl:0.1` (FLAML + H2O), `dataquorum/autogluon:1.6.3`,
   `dataquorum/original:4ffeb7f` (parity runs of the original project).
 - The original project is cloned to `.original/` (git-ignored) with its own venv.
@@ -159,15 +174,16 @@ src/dataquorum/
              findings, checkpoint, review, validation, agent_spec
   agents/    cleaning, wrangling, visualization, loader, sql, eda, features, correctness, checks
   sandbox/   executor, docker_executor, sql_executor (sqlglot read-only guard)
-  ml/        correctness, tuning, explain, calibration, report
+  ml/        correctness, tuning, explain, calibration, report, export, artifact, registry, serving
   ml/automl/ fit_predict (__init__), runner (inside container), benchmark
   evals/     datasets, faults, tasks/*.yaml, inputs, checkers(_ml), oracle, scoring,
              runner, compare, rescore, stats (Wilson, bootstrap, pass@k, McNemar, Friedman),
              parity/
   tracing/   recorder (DuckDB runs + llm_spend)
-  supervisor/, app/   placeholders (weeks 13, 15–16)
+  supervisor/ graph, structured LLM routing, learned first-step experiment
+  app/        Streamlit Studio, pipeline recipes and execution, local launch and views
 images/      sandbox, automl, autogluon, original
-docs/        spec.md (S1–S12), original-bug-log.md, results/week*.md
+docs/        spec.md (S1–S14), original-bug-log.md, results/week*.md
 research/    reasoning_effort/, mini_agent/
 tests/       unit + replay + tests/sandbox (Docker escape probes)
 runs/, data/ local outputs and dataset caches (git-ignored)

@@ -9,3 +9,5 @@ scikit-learn==1.9.1
 # CPU-only model tuning and tree explanations.
 optuna==5.1.0
 shap==0.54.1
+# Persist the fitted sklearn forest across the sandbox boundary.
+skops==0.16.0

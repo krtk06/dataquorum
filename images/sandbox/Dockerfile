@@ -1,7 +1,7 @@
 # Sandbox image for running LLM-generated pandas / Plotly code (spec S5).
 # Small on purpose: only what generated code may import.
 #
-#   docker build -t dataquorum/sandbox:0.3 -f images/sandbox/Dockerfile .
+#   docker build -t dataquorum/sandbox:0.4 -f images/sandbox/Dockerfile .
 #
 # Run flags live in src/dataquorum/sandbox/docker_executor.py (no network, read-only root,
 # non-root user, all capabilities dropped, memory/CPU/PID limits, timeout).

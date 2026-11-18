@@ -7,7 +7,7 @@
     uv run python -m dataquorum.evals.runner --repeats 3 --label pass-at-k
 
 Ablations (recorded in summary.json, compare runs with `python -m dataquorum.evals.compare`):
-- `--no-checks`     agents run without generic or agent-specific validation checks
+- `--no-checks`     disables output validation, including EDA finding grounding
 - `--no-recommend`  code is generated straight from the request, without a step plan
 - `--max-retries N` fix attempts after a crash or failed blocking check (0 = none)
 - `--repeats N`     run every task N times (for pass@k and run-to-run variance)
@@ -71,7 +71,7 @@ def run_task(
     if spec.language == "sql":
         executor = SqlExecutor()
     if options.no_checks:
-        spec = dataclasses.replace(spec, generic_checks=(), extra_checks=())
+        spec = dataclasses.replace(spec, generic_checks=(), extra_checks=(), verify_findings=False)
     engine = Engine(spec, llm, executor, runs_dir=runs_dir, max_retries=options.max_retries,
                     skip_recommend=options.no_recommend)  # fmt: skip
     run_id = f"{eval_id}-{task.id}" + (f"-r{repeat}" if options.repeats > 1 else "")

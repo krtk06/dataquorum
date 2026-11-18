@@ -38,10 +38,14 @@ Rules:
 - Do not guess at causes. Name columns and groups exactly as they appear."""
 
 
-def findings_messages(request: str, table: pd.DataFrame, max_rows: int = 60) -> list[Message]:
+def findings_messages(
+    request: str, table: pd.DataFrame, max_rows: int = 60, *, routing_instructions: str = ""
+) -> list[Message]:
     shown = table.head(max_rows).to_csv(index=False)
     note = f"(first {max_rows} of {len(table)} rows)" if len(table) > max_rows else ""
     user = f"User request (verbatim):\n{request}\n\nAnalysis table {note}:\n{shown}"
+    if routing_instructions:
+        user += f"\nSupervisor instructions for this step:\n{routing_instructions}"
     return [{"role": "system", "content": SYSTEM}, {"role": "user", "content": user}]
 
 

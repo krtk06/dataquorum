@@ -76,8 +76,15 @@ def summarize_frame(df: pd.DataFrame, max_rows: int = 8) -> str:
     return "\n".join(lines)
 
 
-def _context(request: str, data_summary: str, review_notes: list[str]) -> str:
+def _context(
+    request: str, data_summary: str, review_notes: list[str], routing_instructions: str
+) -> str:
     parts = [f"User request (verbatim):\n{request}", f"Data summary:\n{data_summary}"]
+    if routing_instructions:
+        parts.append(
+            "Supervisor instructions for this step (honor the user's constraints):\n"
+            + routing_instructions
+        )
     if review_notes:
         notes = "\n".join(f"{i}. {n}" for i, n in enumerate(review_notes, 1))
         parts.append(f"Reviewer notes, in order (apply all, later notes win on conflict):\n{notes}")
@@ -85,7 +92,12 @@ def _context(request: str, data_summary: str, review_notes: list[str]) -> str:
 
 
 def recommend_messages(
-    spec: AgentSpec, request: str, data_summary: str, review_notes: list[str]
+    spec: AgentSpec,
+    request: str,
+    data_summary: str,
+    review_notes: list[str],
+    *,
+    routing_instructions: str = "",
 ) -> list[Message]:
     system = (
         f"{spec.role}\n\n{spec.recommend_guidance}\n\n"
@@ -98,7 +110,10 @@ def recommend_messages(
     )
     return [
         {"role": "system", "content": system},
-        {"role": "user", "content": _context(request, data_summary, review_notes)},
+        {
+            "role": "user",
+            "content": _context(request, data_summary, review_notes, routing_instructions),
+        },
     ]
 
 
@@ -110,6 +125,8 @@ def code_messages(
     steps: list[str],
     previous_code: str | None = None,
     problem: str | None = None,
+    *,
+    routing_instructions: str = "",
 ) -> list[Message]:
     system = f"{spec.role}\n\n{code_rules(spec)}\n\n{spec.code_guidance}"
     numbered = "\n".join(f"{i}. {s}" for i, s in enumerate(steps, 1))
@@ -118,7 +135,7 @@ def code_messages(
         if steps
         else "No step plan was made; work out the steps from the request yourself."
     )
-    user = _context(request, data_summary, review_notes) + f"\n\n{plan}"
+    user = _context(request, data_summary, review_notes, routing_instructions) + f"\n\n{plan}"
     if previous_code is not None and problem:
         user += (
             f"\n\nYour previous code did not work.\nProblem: {problem}\n\n"

@@ -41,6 +41,9 @@ jobs:
       - name: Test against pandas 3
         if: matrix.pandas == 'pandas 3'
         run: uv run --with "pandas>=3" pytest
+      - name: Studio demo smoke test
+        if: matrix.os == 'ubuntu-latest' && matrix.pandas == 'pandas 2'
+        run: uv run --locked --extra studio pytest -q tests/test_studio.py
 
   sandbox:
     name: sandbox escape tests (Docker)
@@ -51,11 +54,11 @@ jobs:
         with:
           enable-cache: true
       - name: Build the sandbox image
-        run: docker build -t dataquorum/sandbox:0.3 -f images/sandbox/Dockerfile .
+        run: docker build -t dataquorum/sandbox:0.4 -f images/sandbox/Dockerfile .
       - name: Install
-        run: uv sync --locked
-      - name: Escape and executor tests
+        run: uv sync --locked --extra serving
+      - name: Sandbox and model deployment tests
         # Fails if the image is missing instead of silently skipping.
         run: |
-          docker image inspect dataquorum/sandbox:0.3 > /dev/null
-          uv run pytest -m docker -v
+          docker image inspect dataquorum/sandbox:0.4 > /dev/null
+          uv run --locked --extra serving pytest -m docker -v

@@ -1,6 +1,6 @@
 [project]
 name = "dataquorum"
-version = "0.1.0"
+version = "1.0.0"
 description = "A team of AI data-science agents that must prove their work."
 readme = "README.md"
 license = "MIT"
@@ -30,6 +30,28 @@ dependencies = [
 
 [project.urls]
 Repository = "https://github.com/krtk06/dataquorum"
+Changelog = "https://github.com/krtk06/dataquorum/blob/main/CHANGELOG.md"
+Documentation = "https://github.com/krtk06/dataquorum#readme"
+
+[project.optional-dependencies]
+routing = [
+    "onnxruntime>=1.24,<2",
+    "scikit-learn>=1.9.1,<2",
+    "tokenizers>=0.22,<1",
+]
+serving = [
+    "fastapi>=0.135,<1",
+    "mlflow>=3.10,<4",
+    "scikit-learn==1.9.1",
+    "skops==0.16.0",
+    "uvicorn>=0.40,<1",
+]
+studio = [
+    "streamlit>=1.57,<2",
+]
+
+[project.scripts]
+dataquorum-studio = "dataquorum.app.launch:main"
 
 [build-system]
 requires = ["uv_build>=0.13.8,<0.14"]
@@ -106,5 +128,9 @@ known-third-party = ["docker"]
 
 [[tool.mypy.overrides]]
 module = ["openml", "openml.*", "statsmodels", "statsmodels.*", "scipy", "scipy.*",
+          "streamlit", "streamlit.*",
+          "onnxruntime", "tokenizers",
+          "evidently", "evidently.*", "mlflow", "mlflow.*", "skops", "skops.*",
+          "fastapi", "fastapi.*", "uvicorn",
           "optuna", "shap", "flaml", "flaml.*", "h2o", "h2o.*", "autogluon", "autogluon.*", "sklearn", "sklearn.*"]
 ignore_missing_imports = true

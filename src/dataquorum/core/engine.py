@@ -84,7 +84,9 @@ class GeneratedSQL(BaseModel):
 
 class EngineState(BaseModel):
     run_id: str
+    parent_run_id: str | None = None
     request: str  # verbatim, never edited
+    routing_instructions: str = ""
     input_path: str  # Parquet file, folder, or database file (see core/inputs.py)
     input_kind: InputKind = "dataframe"
     workdir: str
@@ -119,7 +121,13 @@ class Nodes:
         return {"data_summary": inputs.describe(s.input_kind, Path(s.input_path))}
 
     def recommend(self, s: EngineState) -> dict[str, Any]:
-        messages = prompts.recommend_messages(self.spec, s.request, s.data_summary, s.review_notes)
+        messages = prompts.recommend_messages(
+            self.spec,
+            s.request,
+            s.data_summary,
+            s.review_notes,
+            routing_instructions=s.routing_instructions,
+        )
         try:
             out = self.llm.structured(
                 messages, RecommendedSteps, reasoning_effort=self.spec.reasoning_effort
@@ -166,6 +174,7 @@ class Nodes:
             s.steps,
             previous_code=s.code if problem else None,
             problem=problem or None,
+            routing_instructions=s.routing_instructions,
         )
         attempts = s.attempts + 1
         try:
@@ -221,7 +230,8 @@ class Nodes:
         table = self._load_output(s.output_path)
         try:
             out = self.llm.structured(
-                findings_messages(s.request, table), Findings,
+                findings_messages(s.request, table, routing_instructions=s.routing_instructions),
+                Findings,
                 reasoning_effort=self.spec.reasoning_effort,
             )  # fmt: skip
         except LLMError as exc:
@@ -232,10 +242,12 @@ class Nodes:
                 detail=f"no findings: {exc}",
             )
             return {"checks": [*s.checks, failed], "usage": s.usage + exc.usage}
-        check = grounding_check(out.value.findings, table)
+        checks = s.checks
+        if self.spec.verify_findings:
+            checks = [*checks, grounding_check(out.value.findings, table)]
         return {
             "findings": out.value.findings,
-            "checks": [*s.checks, check],
+            "checks": checks,
             "usage": s.usage + out.usage,
         }
 
@@ -258,6 +270,7 @@ class Nodes:
         retries = s.usage.retries + max(s.attempts - 1, 0)
         result = AgentResult.from_run(
             run_id=s.run_id,
+            parent_run_id=s.parent_run_id,
             agent=self.spec.name,
             output=output,
             checks=s.checks,
@@ -362,6 +375,8 @@ class Engine:
         *,
         human_review: bool = False,
         run_id: str | None = None,
+        parent_run_id: str | None = None,
+        routing_instructions: str = "",
     ) -> EngineRun:
         run_id = run_id or uuid.uuid4().hex
         workdir = self.runs_dir / run_id
@@ -373,7 +388,9 @@ class Engine:
             )
         state = EngineState(
             run_id=run_id,
+            parent_run_id=parent_run_id,
             request=request,
+            routing_instructions=routing_instructions,
             input_path=str(input_path),
             input_kind=input_kind,
             workdir=str(workdir),

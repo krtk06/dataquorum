@@ -1,10 +1,9 @@
-# Week 17 release preparation
+# Week 17 release and verification
 
-The v1.0.0 candidate includes the Python library and optional Studio, model serving, and
-routing tools. On November 18, 2026, the public listings showed v0.1.0 on GitHub and the
-v0.0.1 placeholder on PyPI. The paired Week 14 live study and Week 13 live routing
-comparison remain pending.
-[GitHub releases](https://github.com/krtk06/dataquorum/releases) ·
+DataQuorum v1.0.0 was released on GitHub on November 18, 2026, from commit `d6af68c`.
+It includes the Python library and optional Studio, model serving, and routing tools.
+PyPI publishing and the paid Week 13 and Week 14 live evaluations remain pending.
+[GitHub release](https://github.com/krtk06/dataquorum/releases/tag/v1.0.0) ·
 [PyPI package](https://pypi.org/project/dataquorum/)
 
 ## Release materials
@@ -33,6 +32,11 @@ The source archive independently built and installed in a separate Python 3.12 e
 Both artifacts passed `twine check --strict` and matched their SHA-256 checksums. The
 repository suite passed all 396 tests, including Docker checks. Ruff, strict mypy, and
 the uv lock check passed. The suite emitted an MLflow dependency deprecation warning.
+
+All four GitHub CI jobs passed on the tagged commit, including Windows and Ubuntu,
+pandas 2 and 3, the Studio smoke test, and the Docker suite. The GitHub wheel, source
+archive, and checksum file matched the SHA-256 digests of the local files.
+[Release CI run](https://github.com/krtk06/dataquorum/actions/runs/44326748340)
 
 ## Build and verify locally
 
@@ -63,13 +67,12 @@ the uv lock check passed. The suite emitted an MLflow dependency deprecation war
    & 'runs/release-check/Scripts/dataquorum-studio.exe' --port 8503
    ```
 
-## Publish when approved
+## Publish to PyPI
 
-1. Review the release changes and confirm the intended commit and artifacts.
-2. For the GitHub release, tag the approved commit as `v1.0.0` and attach the wheel,
-   source archive, and checksums from `dist/v1.0.0`.
-3. For PyPI, the project owner runs the following in PowerShell 7 from the repository root.
-   Enter a PyPI token only at the masked prompt.
+1. Check the wheel and source archive in `dist/v1.0.0` against the checksum file
+   attached to the GitHub release.
+2. As the project owner, run the following in PowerShell 7 from the repository root.
+   Enter your PyPI token at the masked prompt.
 
    ```powershell
    $env:UV_PUBLISH_TOKEN = Read-Host 'PyPI API token' -MaskInput

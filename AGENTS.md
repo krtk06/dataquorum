@@ -12,8 +12,9 @@ from-scratch rebuild of business-science/ai-data-science-team (MIT; credited in 
 no code copied). It is a Python library of LLM agents that write pandas/SQL/sklearn code,
 run it in a locked-down Docker sandbox, validate the result and report an honest
 `success` / `failed` / `needs_review`. A 17-week portfolio project (ML + data science depth)
-with ~15 h/week. Repo: https://github.com/krtk06/dataquorum (public). v0.1.0 is released on
-GitHub; **Studio for weeks 15–16 is implemented and week 14's live study is pending.**
+with ~15 h/week. Repo: https://github.com/krtk06/dataquorum (public).
+[v1.0.0 is released on GitHub](https://github.com/krtk06/dataquorum/releases/tag/v1.0.0).
+Week 14's live study is pending.
 
 ## Where things stand (2026-11-18)
 
@@ -52,8 +53,8 @@ installed with `npx impeccable install --providers=codex --scope=project --no-ho
 See
 [Studio workflows and verification](docs/results/week15-16-studio.md).
 
-**Week 17** prepared the v1.0.0 candidate, README, captioned Studio demo, and two
-write-ups. Local distributions are in `dist/v1.0.0`. See
+**Week 17** completed the README, captioned Studio demo, two write-ups and the
+v1.0.0 GitHub release. Local distributions are in `dist/v1.0.0`. See
 [release verification and publishing handoff](docs/results/week17-release.md).
 
 The v1.0.0 PyPI upload remains with the user. The package listing shows the existing

@@ -246,3 +246,10 @@ benchmark evidence and its limitations.
 - Public release listings showed GitHub v0.1.0 and PyPI v0.0.1, both for this project.
   That corrects the earlier PyPI placeholder note. The user owns PyPI publishing.
 - Week 13's paid routing comparison and Week 14's 112-trial live study await approval.
+
+**v1.0.0 released on GitHub 2026-11-18.** All four GitHub CI jobs passed for
+`d6af68c`. The annotated tag points to that commit. Built the wheel and sdist
+from the committed source and verified all three uploaded file digests against
+their local copies. PyPI publishing remains with the user.
+[GitHub release](https://github.com/krtk06/dataquorum/releases/tag/v1.0.0) ·
+[CI run](https://github.com/krtk06/dataquorum/actions/runs/44326748340)
